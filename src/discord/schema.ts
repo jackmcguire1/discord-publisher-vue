@@ -150,38 +150,38 @@ export function emptyMessage(): Message {
   return { content: "", tts: false, embeds: [] };
 }
 
-/** Starter message shown on first load. */
+/** Starter message shown on first load: a release announcement for the Stat-Milestones Twitch extension. */
 export function defaultMessage(): Message {
   return {
     content: "",
     tts: false,
-    username: "Green Man Gaming",
-    avatar_url:
-      "https://cdn.discordapp.com/icons/932963489075568660/4f6c00c27cd8a4383e172ace9b5fb729.png?size=160&quality=lossless",
+    username: "Stat-Milestones",
+    avatar_url: "https://pbs.twimg.com/profile_images/1533157608537960449/h-KjDil9_400x400.jpg",
     embeds: [
       {
         id: uniqueId(),
-        title: "The Elder Scrolls V: Skyrim Special Edition",
-        url: "https://www.greenmangaming.com/games/the-elder-scrolls-v-skyrim-special-edition/",
-        color: 4713220,
-        image: {
-          url: "https://images.greenmangaming.com/6eb1c068b9f345df979de4b694d85ba4/8e3a20e78d3243c3a8435292ac1f448c.jpg",
+        author: {
+          name: "Stat-Milestones",
+          icon_url: "https://pbs.twimg.com/profile_images/1533157608537960449/h-KjDil9_400x400.jpg",
+          url: "https://stat-milestones.dev",
         },
-        thumbnail: {
-          url: "https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/489830/header.jpg?t=1753715778",
-        },
+        title: "Stat-Milestones v1.8.2 is live",
+        url: "https://stat-milestones.dev",
+        color: 0x9146ff,
+        description:
+          "A small maintenance release for the Stat-Milestones Twitch extension.\n\n" +
+          "**What's new**\n" +
+          "- Milestone gauges now update the moment a goal is hit instead of on the next poll\n" +
+          "- Added a compact layout for the panel view\n\n" +
+          "**Fixes**\n" +
+          "- Charity campaign totals no longer reset when the stream goes offline\n" +
+          "- Hype train progress respects the configured level cap\n\n" +
+          "The update rolls out automatically; no action needed from streamers.",
         fields: [
-          { id: uniqueId(), name: "RRP Price", value: "**~~£34.99~~**", inline: true },
-          { id: uniqueId(), name: "Discount Price", value: "**£7.99**", inline: true },
-          { id: uniqueId(), name: "Metacritic Score", value: "**84/100**", inline: true },
-          {
-            id: uniqueId(),
-            name: "Description",
-            value:
-              "Winner of more than 200 Game of the Year Awards, The Elder Scrolls V: Skyrim Special Edition brings the epic fantasy to life in stunning detail.\n\nThe Special Edition includes the critically acclaimed game and add-ons with all-new features like remastered art and effects, volumetric god rays, dynamic depth of field.",
-            inline: false,
-          },
+          { id: uniqueId(), name: "Version", value: "v1.8.2", inline: true },
+          { id: uniqueId(), name: "Release date", value: "30/09/2026", inline: true },
         ],
+        footer: { text: "stat-milestones.dev" },
       },
     ],
   };

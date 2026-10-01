@@ -2,14 +2,14 @@ describe("drafts", () => {
   beforeEach(() => cy.visitClean());
 
   it("saves a draft, lists it and shows it as the one being edited", () => {
-    cy.window().then((w) => cy.stub(w, "prompt").returns("Skyrim promo"));
+    cy.window().then((w) => cy.stub(w, "prompt").returns("Release notes"));
     cy.contains("button", "Save draft").click();
     cy.toast("Draft saved");
-    cy.contains("Draft:").should("contain.text", "Skyrim promo");
+    cy.contains("Draft:").should("contain.text", "Release notes");
 
     cy.openModal("Drafts");
     cy.get(".draft").should("have.length", 1).and("have.class", "active");
-    cy.get(".draft-name").should("have.text", "Skyrim promo");
+    cy.get(".draft-name").should("have.text", "Release notes");
     cy.get(".draft .tag").should("contain.text", "editing");
   });
 
@@ -38,7 +38,7 @@ describe("drafts", () => {
     cy.openModal("Drafts");
     cy.contains(".draft", "Original").contains("button", "Load").click();
     cy.toast("Draft loaded");
-    cy.get(".discord-embed-title").should("contain.text", "Skyrim");
+    cy.get(".discord-embed-title").should("contain.text", "v1.8.2");
   });
 
   it("renames, duplicates and deletes drafts", () => {

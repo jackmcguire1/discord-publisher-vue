@@ -21,7 +21,7 @@ describe("publishing", () => {
 
     cy.wait("@send").then(({ request }) => {
       expect(request.url).to.include("?wait=true");
-      expect(request.body.username).to.eq("Green Man Gaming");
+      expect(request.body.username).to.eq("Stat-Milestones");
       expect(request.body.embeds).to.have.length(1);
       expect(request.body.embeds[0]).to.not.have.property("id");
       expect(request.body.embeds[0].fields[0]).to.not.have.property("id");
@@ -33,7 +33,7 @@ describe("publishing", () => {
     cy.contains("a", "open in Discord")
       .should("have.attr", "href")
       .and("include", "/555666777888999000/999000111222333444");
-    cy.contains("Draft:").should("contain.text", "Skyrim");
+    cy.contains("Draft:").should("contain.text", "v1.8.2");
     cy.contains("button", "Drafts").find(".tag").should("have.text", "1");
   });
 

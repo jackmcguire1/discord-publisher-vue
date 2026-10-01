@@ -2,10 +2,12 @@ describe("editor and preview", () => {
   beforeEach(() => cy.visitClean());
 
   it("loads the starter message and renders it in the preview", () => {
-    cy.get(".discord-author-username").should("have.text", "Green Man Gaming");
-    cy.get(".discord-embed-title").should("contain.text", "Skyrim");
-    cy.get(".discord-embed-field").should("have.length", 4);
-    cy.get(".discord-embed-thumbnail").should("have.attr", "src").and("include", "steam");
+    cy.get(".discord-author-username").should("have.text", "Stat-Milestones");
+    cy.get(".discord-embed-title").should("contain.text", "v1.8.2");
+    cy.get(".discord-embed-author").should("contain.text", "Stat-Milestones");
+    cy.get(".discord-embed-field").should("have.length", 2);
+    cy.get(".discord-embed-inline-field").should("have.length", 2);
+    cy.get(".discord-embed-footer").should("contain.text", "stat-milestones.dev");
   });
 
   it("renders Discord markdown in content", () => {
@@ -31,13 +33,13 @@ describe("editor and preview", () => {
 
   it("adds a field and shows it inline in the preview", () => {
     cy.contains("button", "+ Add field").click();
-    cy.get(".field-card").should("have.length", 5);
+    cy.get(".field-card").should("have.length", 3);
     cy.contains(".field-error", "Name is required").should("exist");
     cy.get(".field-card").last().within(() => {
       cy.get("input.input").type("Platform", { delay: 0 });
-      cy.get("textarea").type("Steam", { delay: 0 });
+      cy.get("textarea").type("Twitch", { delay: 0 });
     });
-    cy.get(".discord-embed-field").should("have.length", 5).last().should("contain.text", "Steam");
+    cy.get(".discord-embed-field").should("have.length", 3).last().should("contain.text", "Twitch");
     cy.contains(".field-error", "Name is required").should("not.exist");
   });
 
@@ -49,13 +51,13 @@ describe("editor and preview", () => {
   });
 
   it("supports undo and redo", () => {
-    cy.get(".card-title").first().should("contain.text", "Skyrim");
+    cy.get(".card-title").first().should("contain.text", "v1.8.2");
     cy.get(".embed-card").first().find("input").first().clear().type("Renamed", { delay: 0 });
     cy.get(".discord-embed-title").should("have.text", "Renamed");
     // History groups keystrokes; wait for the debounce then undo.
     cy.wait(500);
     cy.contains("button", "Undo").should("not.be.disabled").click();
-    cy.get(".discord-embed-title").should("contain.text", "Skyrim");
+    cy.get(".discord-embed-title").should("contain.text", "v1.8.2");
     cy.contains("button", "Redo").click();
     cy.get(".discord-embed-title").should("have.text", "Renamed");
   });

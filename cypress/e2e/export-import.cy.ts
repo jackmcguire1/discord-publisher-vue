@@ -7,9 +7,10 @@ describe("JSON and cURL", () => {
       .invoke("val")
       .then((val) => {
         const payload = JSON.parse(String(val));
-        expect(payload.username).to.eq("Green Man Gaming");
+        expect(payload.username).to.eq("Stat-Milestones");
         expect(payload.embeds[0]).to.not.have.property("id");
-        expect(payload.embeds[0].fields).to.have.length(4);
+        expect(payload.embeds[0].author.url).to.eq("https://stat-milestones.dev");
+        expect(payload.embeds[0].fields).to.have.length(2);
         expect(payload).to.not.have.property("content");
       });
   });
@@ -44,7 +45,7 @@ describe("JSON and cURL", () => {
       .invoke("val")
       .should("include", "curl -X POST 'https://discord.com/api/webhooks/123456789012345678/abcDEF_test-token-xyz?wait=true'")
       .and("include", "-H 'Content-Type: application/json'")
-      .and("include", '"username": "Green Man Gaming"');
+      .and("include", '"username": "Stat-Milestones"');
     cy.contains("Edit published message").find("input").should("be.disabled");
   });
 
