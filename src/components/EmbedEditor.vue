@@ -67,7 +67,7 @@ function inputValue(e: Event) { return (e.target as HTMLInputElement).value; }
 </script>
 
 <template>
-  <div class="card">
+  <div class="card embed-card">
     <div class="card-header" @click="open = !open">
       <span class="card-accent" :style="{ background: embed.color !== undefined ? colorIntToHex(embed.color) : 'var(--border)' }" />
       <span class="chevron" :class="{ open }">▶</span>

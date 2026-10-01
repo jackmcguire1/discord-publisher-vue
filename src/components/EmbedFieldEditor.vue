@@ -14,7 +14,7 @@ const path = () => `embeds.${props.embedIndex}.fields.${props.index}`;
 </script>
 
 <template>
-  <div class="card">
+  <div class="card field-card">
     <div class="card-body" style="border-top: none">
       <div class="row row-between">
         <span class="muted small">Field {{ index + 1 }}</span>

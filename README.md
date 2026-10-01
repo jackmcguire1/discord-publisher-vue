@@ -15,6 +15,7 @@ Live site: **https://jackmcguire1.github.io/discord-publisher-vue/**
 - [Quick start](#quick-start)
 - [How to use it](#how-to-use-it)
 - [Discord limits enforced](#discord-limits-enforced)
+- [Testing and CI](#testing-and-ci)
 - [Deploying](#deploying)
 - [Storage and privacy](#storage-and-privacy)
 - [How publishing works](#how-publishing-works)
@@ -86,6 +87,8 @@ Open http://localhost:5173. Other scripts:
 | `yarn typecheck` | Run `vue-tsc` across the project             |
 | `yarn build`     | Type-check, then build to `dist/`            |
 | `yarn preview`   | Serve the production build locally           |
+| `yarn test`      | Run the Cypress e2e suite headlessly         |
+| `yarn test:open` | Open the Cypress runner for development      |
 
 ## How to use it
 
@@ -133,6 +136,37 @@ Load the draft (or just stay on it), make your changes, and click **Update publi
 | Total text across one embed    | 6000 chars   |
 
 Discord also rejects usernames containing "clyde" or "discord", and the names "everyone" and "here". The validator catches those too.
+
+## Testing and CI
+
+End-to-end coverage lives in `cypress/e2e/` and runs against the dev server on port 5180. The suite stubs Discord's webhook endpoints with `cy.intercept`, so no real request leaves the machine and no webhook is needed. It covers:
+
+- editor behaviour: starter message, markdown rendering, adding/removing embeds and fields, limits and counters, undo/redo, clear, persistence across reloads
+- publishing: URL validation, `POST …?wait=true` payload shape, thread IDs, `PATCH` edits without identity fields, `DELETE`, webhook mismatch handling, Discord error surfacing
+- JSON and cURL export, pasting and applying JSON, invalid JSON handling
+- drafts: save, update, save-as-new, load, rename, duplicate, delete, published state, import of export files and bare payloads
+
+```bash
+yarn test        # headless, about 15 seconds
+yarn test:open   # interactive
+```
+
+Three GitHub Actions workflows keep the repo healthy:
+
+| Workflow                    | Trigger                | What it does                                                                 |
+| --------------------------- | ---------------------- | ---------------------------------------------------------------------------- |
+| `ci.yml`                    | PRs and pushes to main | Type-check, production build, Cypress in Chrome. Uploads screenshots on failure. |
+| `dependabot-automerge.yml`  | Dependabot PRs         | Enables auto-merge for minor and patch bumps once CI passes. Comments on majors. |
+| `deploy.yml`                | Pushes to main         | Builds and publishes to GitHub Pages.                                        |
+
+Dependabot (`.github/dependabot.yml`) opens one grouped PR a week for minor and patch npm updates, separate PRs for major versions, and a grouped PR for GitHub Actions.
+
+For auto-merge to work the repository needs two settings, both one-time:
+
+1. **Settings → General → Pull Requests**: tick **Allow auto-merge**.
+2. **Settings → Branches**: add a protection rule for `main` that requires the **Typecheck, build and e2e** status check. Without a required check, auto-merge would merge immediately rather than waiting for CI.
+
+Merges triggered with the default `GITHUB_TOKEN` do not start other workflows, so an auto-merged Dependabot PR would not redeploy the site. To fix that, create a fine-grained personal access token with `contents: write` and `pull_requests: write` on this repo and add it as the `AUTOMERGE_TOKEN` secret. The workflow uses it when present and falls back to `GITHUB_TOKEN` otherwise.
 
 ## Deploying
 
@@ -204,6 +238,9 @@ src/
 │  └─ preview.css      Pruned discord-components stylesheet for the preview
 ├─ App.vue
 └─ main.ts
+cypress/
+├─ e2e/              editor, publish, export-import and drafts specs
+└─ support/e2e.ts    custom commands (visitClean, stubDiscord, setWebhook, …)
 ```
 
 There is no router, no Pinia and no UI framework. Stores are plain module-level `ref`s, which is all a single-page editor needs.
