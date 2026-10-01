@@ -2,7 +2,9 @@
 
 **Compose, preview, publish and track Discord webhook messages, entirely in your browser.**
 
-Discord Publisher is a small single-page app for people who post announcements, deals, patch notes or anything else through Discord webhooks. You build the message in a form, see exactly how Discord will render it, send it with one click, and the app remembers what you sent so you can edit or delete it later. There is no backend and no login. Everything stays in your browser.
+Build the message in a form, see exactly how Discord will render it, send it with one click, and come back later to edit or delete what you sent. No backend, no login. Everything stays in your browser.
+
+Built with Vue 3, Vite and TypeScript. Runtime dependencies: `vue`, `zod`, `simple-markdown` and `highlight.js`.
 
 Live site: **https://jackmcguire1.github.io/discord-publisher-vue/**
 
@@ -10,7 +12,6 @@ Live site: **https://jackmcguire1.github.io/discord-publisher-vue/**
 
 ## Contents
 
-- [Why this exists](#why-this-exists)
 - [Features](#features)
 - [Quick start](#quick-start)
 - [How to use it](#how-to-use-it)
@@ -21,14 +22,6 @@ Live site: **https://jackmcguire1.github.io/discord-publisher-vue/**
 - [How publishing works](#how-publishing-works)
 - [Project structure](#project-structure)
 - [Troubleshooting](#troubleshooting)
-
-## Why this exists
-
-Most embed builders are either tied to a hosted bot with accounts, premium tiers and a server-side API, or they stop at generating JSON and leave the sending to you. This project is the stripped-down middle ground: a message editor with a faithful preview, direct webhook publishing, and a lightweight drafts tracker, with nothing else attached.
-
-It is a ground-up Vue rewrite of a fork of [Embed Generator](https://github.com/merlinfuchs/embed-generator). The React app, backend API, components, scheduling, premium features and Discord Activity integration are gone. What remains is the part that mattered: the message editor, the preview, and publishing.
-
-The whole app is about 2,000 lines of source and four runtime dependencies: `vue`, `zod`, `simple-markdown` and `highlight.js`.
 
 ## Features
 
@@ -43,7 +36,7 @@ The whole app is about 2,000 lines of source and four runtime dependencies: `vue
 
 ### Preview
 
-- Renders the message as Discord does, using Discord's own fonts and a pruned port of the discord-components stylesheet.
+- Renders the message as Discord does, using Discord's fonts and styling.
 - Markdown support: bold, italic, underline, strikethrough, inline code, fenced code blocks with syntax highlighting, block quotes, headings, subtext, lists, spoilers, links, user/role/channel mentions, `@everyone`/`@here`, custom emoji and `<t:…>` timestamps in every format.
 - Inline fields lay out in rows of three, just like Discord.
 
@@ -235,7 +228,7 @@ src/
 │  └─ Field.vue, Modal.vue, Toasts.vue
 ├─ styles/
 │  ├─ app.css          Application styling (CSS variables, dark theme)
-│  └─ preview.css      Pruned discord-components stylesheet for the preview
+│  └─ preview.css      Discord message styling for the preview
 ├─ App.vue
 └─ main.ts
 cypress/
@@ -264,7 +257,3 @@ The preview loads images from your browser, which may have cookies or network ac
 
 **I lost my drafts**
 Drafts live in the browser's `localStorage` for this site. Clearing site data, using a private window or switching browsers starts from empty. Use **Export all** regularly if the drafts matter.
-
-## Acknowledgements
-
-The markdown parser and preview stylesheet are adapted from [Embed Generator](https://github.com/merlinfuchs/embed-generator), which in turn builds on [discord-markdown](https://github.com/brussell98/discord-markdown) and [discord-components](https://github.com/skyra-project/discord-components).
