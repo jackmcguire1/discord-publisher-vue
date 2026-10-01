@@ -211,3 +211,6 @@ textarea.input.code { font-family: var(--mono); font-size: 12px; min-height: 240
 
 .preview-frame { background: #313338; border-radius: 8px; padding: 12px 0; }
 .preview-empty { color: var(--text-muted); padding: 24px 16px; font-style: italic; }
+
+select.input { appearance: auto; cursor: pointer; padding-right: 28px; }
+select.input option { background: var(--bg-0); color: var(--text-strong); }

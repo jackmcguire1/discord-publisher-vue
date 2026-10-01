@@ -5,9 +5,16 @@ import { parseWebhookUrl } from "../discord/webhook";
 interface Settings {
   webhookUrl: string;
   threadId: string;
+  /** Id of the saved webhook the URL came from, or null for a hand-typed URL. */
+  webhookId: string | null;
 }
 
-const state = ref<Settings>(load<Settings>("settings", { webhookUrl: "", threadId: "" }));
+const stored = load<Partial<Settings>>("settings", {});
+const state = ref<Settings>({
+  webhookUrl: stored.webhookUrl ?? "",
+  threadId: stored.threadId ?? "",
+  webhookId: stored.webhookId ?? null,
+});
 persistRef("settings", state);
 
 export const settings = state;

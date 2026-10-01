@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
 import { settings, webhookInfo } from "../stores/settings";
+import { savedWebhooks, getWebhook, selectWebhook, webhookByDiscordId } from "../stores/webhooks";
 import { message, isValid, errors, currentDraftId } from "../stores/message";
 import { getDraft, createDraft, updateDraftMessage, setDraftPublished } from "../stores/drafts";
 import { sendMessage, editMessage, deleteMessage, messageLink, type DiscordApiError } from "../discord/webhook";
@@ -8,7 +9,21 @@ import { toast } from "../stores/toasts";
 import { formatDateTime } from "../util";
 import Field from "./Field.vue";
 
+const emit = defineEmits<{ manage: [] }>();
+
 const showUrl = ref(false);
+const selected = computed(() => getWebhook(settings.value.webhookId));
+const publishedVia = computed(() => webhookByDiscordId(published.value?.webhookId));
+
+function onPick(e: Event) {
+  selectWebhook((e.target as HTMLSelectElement).value || null);
+}
+
+/** Typing a URL by hand detaches it from any saved webhook. */
+function onUrlInput(e: Event) {
+  settings.value.webhookUrl = (e.target as HTMLInputElement).value.trim();
+  settings.value.webhookId = null;
+}
 const busy = ref<"" | "send" | "edit" | "delete">("");
 
 const draft = computed(() => getDraft(currentDraftId.value));
@@ -93,27 +108,39 @@ async function remove() {
   <section class="card">
     <div class="card-body" style="border-top: none">
       <div class="publish-grid">
-        <Field
-          label="Webhook URL"
-          :error="settings.webhookUrl && !webhookInfo ? 'Not a Discord webhook URL' : undefined"
-          hint="stored in this browser only"
-        >
+        <Field label="Webhook" :hint="selected?.description || (savedWebhooks.length ? `${savedWebhooks.length} saved` : 'none saved yet')">
           <div class="row row-nowrap">
-            <input
-              v-model.trim="settings.webhookUrl"
-              :type="showUrl ? 'text' : 'password'"
-              class="input grow"
-              placeholder="https://discord.com/api/webhooks/…"
-              autocomplete="off"
-              spellcheck="false"
-            />
-            <button class="btn btn-ghost btn-sm" @click="showUrl = !showUrl">{{ showUrl ? "Hide" : "Show" }}</button>
+            <select class="input grow" :value="settings.webhookId ?? ''" @change="onPick">
+              <option value="">Custom URL</option>
+              <option v-for="w in savedWebhooks" :key="w.id" :value="w.id">{{ w.name }}</option>
+            </select>
+            <button class="btn btn-ghost btn-sm" @click="emit('manage')">Manage</button>
           </div>
         </Field>
         <Field label="Thread ID" hint="optional">
           <input v-model.trim="settings.threadId" class="input" placeholder="Forum / thread id" inputmode="numeric" />
         </Field>
       </div>
+
+      <Field
+        label="Webhook URL"
+        :error="settings.webhookUrl && !webhookInfo ? 'Not a Discord webhook URL' : undefined"
+        :hint="selected ? `from saved webhook “${selected.name}”` : 'stored in this browser only'"
+      >
+        <div class="row row-nowrap">
+          <input
+            :value="settings.webhookUrl"
+            :type="showUrl ? 'text' : 'password'"
+            class="input grow"
+            placeholder="https://discord.com/api/webhooks/…"
+            autocomplete="off"
+            spellcheck="false"
+            @input="onUrlInput"
+          />
+          <button class="btn btn-ghost btn-sm" @click="showUrl = !showUrl">{{ showUrl ? "Hide" : "Show" }}</button>
+          <button v-if="!selected && webhookInfo" class="btn btn-ghost btn-sm" title="Save this URL with a nickname" @click="emit('manage')">Save…</button>
+        </div>
+      </Field>
 
       <div v-if="!isValid" class="banner banner-error">
         <span>⚠</span>
@@ -137,7 +164,7 @@ async function remove() {
       <div v-if="published" class="banner banner-success small">
         <span>✓</span>
         <span>
-          Published {{ formatDateTime(published.publishedAt) }} ·
+          Published {{ formatDateTime(published.publishedAt) }}<template v-if="publishedVia"> via <strong>{{ publishedVia.name }}</strong></template> ·
           message <code class="mono">{{ published.messageId }}</code> ·
           <a :href="messageLink(published)" target="_blank" rel="noreferrer">open in Discord</a>
           <template v-if="!canEditPublished"> · <span class="muted">different webhook configured, editing disabled</span></template>

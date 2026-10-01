@@ -9,9 +9,10 @@ import MessagePreview from "./components/MessagePreview.vue";
 import JsonModal from "./components/JsonModal.vue";
 import CurlModal from "./components/CurlModal.vue";
 import DraftsModal from "./components/DraftsModal.vue";
+import WebhooksModal from "./components/WebhooksModal.vue";
 import Toasts from "./components/Toasts.vue";
 
-type View = "json" | "curl" | "drafts" | null;
+type View = "json" | "curl" | "drafts" | "webhooks" | null;
 const view = ref<View>(null);
 const draft = computed(() => getDraft(currentDraftId.value));
 
@@ -38,7 +39,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKey));
           <span v-if="draft" class="muted small">Draft: <strong>{{ draft.name }}</strong></span>
           <span v-else class="muted small">Unsaved message</span>
         </div>
-        <PublishPanel />
+        <PublishPanel @manage="view = 'webhooks'" />
         <Toolbar @open="view = $event" />
         <hr class="divider" />
         <MessageEditor />
@@ -53,6 +54,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKey));
     <JsonModal v-if="view === 'json'" @close="view = null" />
     <CurlModal v-if="view === 'curl'" @close="view = null" />
     <DraftsModal v-if="view === 'drafts'" @close="view = null" />
+    <WebhooksModal v-if="view === 'webhooks'" @close="view = null" />
     <Toasts />
   </div>
 </template>

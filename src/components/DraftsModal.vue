@@ -4,6 +4,7 @@ import Modal from "./Modal.vue";
 import { drafts, deleteDraft, duplicateDraft, renameDraft, exportDrafts, importDrafts, type Draft } from "../stores/drafts";
 import { message, currentDraftId, replaceMessage } from "../stores/message";
 import { messageLink } from "../discord/webhook";
+import { webhookByDiscordId } from "../stores/webhooks";
 import { downloadText, readFileAsText, slugify, formatDateTime } from "../util";
 import { toast } from "../stores/toasts";
 
@@ -70,7 +71,7 @@ async function importFiles(e: Event) {
             Updated {{ formatDateTime(d.updatedAt) }}
             · {{ d.message.embeds.length }} embed{{ d.message.embeds.length === 1 ? "" : "s" }}
             <template v-if="d.published">
-              · published {{ formatDateTime(d.published.publishedAt) }} ·
+              · published {{ formatDateTime(d.published.publishedAt) }}<template v-if="webhookByDiscordId(d.published.webhookId)"> via {{ webhookByDiscordId(d.published.webhookId)!.name }}</template> ·
               <a :href="messageLink(d.published)" target="_blank" rel="noreferrer">open</a>
             </template>
           </div>

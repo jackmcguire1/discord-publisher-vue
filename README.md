@@ -42,12 +42,13 @@ Live site: **https://jackmcguire1.github.io/discord-publisher-vue/**
 
 ### Publishing
 
-- Paste a webhook URL once. It is stored in your browser and masked in the UI.
+- **Saved webhooks**: give each webhook URL a nickname and description, then pick the destination from a dropdown. Add, edit and delete them from the Manage dialog, or save a URL you have just typed with one click.
+- Or paste a webhook URL directly. Either way it is stored in your browser and masked in the UI.
 - Optional **thread ID** for posting into forum posts or threads.
 - **Publish** sends the message and records the returned message ID.
 - **Update published** edits the message in place on Discord.
 - **Delete from Discord** removes it.
-- Each published message links straight to it in Discord.
+- Each published message links straight to it in Discord and shows which saved webhook it went through.
 
 ### Export and import
 
@@ -87,7 +88,9 @@ Open http://localhost:5173. Other scripts:
 
 ### 1. Get a webhook URL
 
-In Discord, open the channel settings, go to **Integrations → Webhooks**, create one and copy its URL. It looks like `https://discord.com/api/webhooks/<id>/<token>`. Paste it into the **Webhook URL** box at the top of the editor. Treat the token like a password: anyone with the URL can post to that channel.
+In Discord, open the channel settings, go to **Integrations → Webhooks**, create one and copy its URL. It looks like `https://discord.com/api/webhooks/<id>/<token>`. Treat the token like a password: anyone with the URL can post to that channel.
+
+In the editor, click **Manage** next to the Webhook dropdown, give the webhook a nickname (for example "Announcements") and an optional description, and paste the URL. It is selected automatically. Add as many as you like and switch between them from the dropdown. If you would rather not save it, choose **Custom URL** and paste it into the **Webhook URL** box; a **Save…** button appears if you change your mind.
 
 ### 2. Build the message
 
@@ -135,6 +138,7 @@ Discord also rejects usernames containing "clyde" or "discord", and the names "e
 End-to-end coverage lives in `cypress/e2e/` and runs against the dev server on port 5180. The suite stubs Discord's webhook endpoints with `cy.intercept`, so no real request leaves the machine and no webhook is needed. It covers:
 
 - editor behaviour: starter message, markdown rendering, adding/removing embeds and fields, limits and counters, undo/redo, clear, persistence across reloads
+- saved webhooks: add, edit, delete, select, auto-select on save, save a typed URL, persistence
 - publishing: URL validation, `POST …?wait=true` payload shape, thread IDs, `PATCH` edits without identity fields, `DELETE`, webhook mismatch handling, Discord error surfacing
 - JSON and cURL export, pasting and applying JSON, invalid JSON handling
 - drafts: save, update, save-as-new, load, rename, duplicate, delete, published state, import of export files and bare payloads
@@ -184,11 +188,12 @@ All state lives in `localStorage` under the `discord-publisher:` prefix:
 | ---------- | --------------------------------------------------------------- |
 | `current`  | The message currently in the editor and which draft it came from |
 | `drafts`   | Saved drafts, including published message references            |
-| `settings` | Webhook URL and thread ID                                       |
+| `settings` | Active webhook URL, which saved webhook it came from, thread ID  |
+| `webhooks` | Saved webhooks: nickname, description and URL                   |
 
 Nothing is sent anywhere except to the Discord webhook you configure.
 
-The webhook URL contains a secret token. It is stored only in `settings`. Drafts record the webhook **ID** and the published message ID, never the token, so exported draft files are safe to share. The cURL export does include the full webhook URL when one is set, so treat that output as sensitive.
+Webhook URLs contain a secret token. They are stored only in `settings` and `webhooks`. Drafts record the webhook **ID** and the published message ID, never the token, so exported draft files are safe to share. The cURL export does include the full webhook URL when one is set, so treat that output as sensitive.
 
 Clearing your browser's site data removes everything. Export your drafts first if you want to keep them.
 
@@ -217,14 +222,15 @@ src/
 ├─ stores/
 │  ├─ message.ts       Current message, validation, undo/redo
 │  ├─ drafts.ts        Saved drafts and import/export
-│  ├─ settings.ts      Webhook URL and thread ID
+│  ├─ settings.ts      Active webhook URL and thread ID
+│  ├─ webhooks.ts      Saved webhooks (nickname, description, URL)
 │  ├─ toasts.ts        Notifications
 │  └─ persist.ts       localStorage helpers
 ├─ components/
 │  ├─ MessageEditor.vue, EmbedEditor.vue, EmbedFieldEditor.vue
 │  ├─ MessagePreview.vue
 │  ├─ PublishPanel.vue, Toolbar.vue
-│  ├─ JsonModal.vue, CurlModal.vue, DraftsModal.vue
+│  ├─ JsonModal.vue, CurlModal.vue, DraftsModal.vue, WebhooksModal.vue
 │  └─ Field.vue, Modal.vue, Toasts.vue
 ├─ styles/
 │  ├─ app.css          Application styling (CSS variables, dark theme)
@@ -232,7 +238,7 @@ src/
 ├─ App.vue
 └─ main.ts
 cypress/
-├─ e2e/              editor, publish, export-import and drafts specs
+├─ e2e/              editor, publish, webhooks, export-import and drafts specs
 └─ support/e2e.ts    custom commands (visitClean, stubDiscord, setWebhook, …)
 ```
 
