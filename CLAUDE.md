@@ -23,7 +23,7 @@ CI (`.github/workflows/ci.yml`) runs typecheck, build and the Cypress suite on e
 - `src/discord/schema.ts` – Zod schema for the editable message, limits, `validateMessage`, `parseIncomingMessage` (normalises any raw payload into editor state).
 - `src/discord/webhook.ts` – webhook URL parsing, `buildPayload` (strips editor-only `id`s and empty values), send/edit/delete/fetch calls, cURL generation.
 - `src/discord/markdown.js` – Discord markdown → HTML for the preview (ported; keep it plain JS).
-- `src/stores/*` – module-level reactive stores (`message` with undo/redo + validation, `drafts`, `settings`, `webhooks`, `toasts`) persisted via `persist.ts` to `localStorage` under the `discord-publisher:` prefix. `settings.webhookId` points at a saved webhook; a hand-typed URL sets it to null.
+- `src/stores/*` – module-level reactive stores (`message` with undo/redo + validation, `drafts`, `settings`, `webhooks`, `servers`, `toasts`) persisted via `persist.ts` to `localStorage` under the `discord-publisher:` prefix. `settings.webhookId` points at a saved webhook; a hand-typed URL sets it to null.
 - `src/components/*` – editor, preview, publish panel, and the JSON / cURL / drafts modals.
 - `cypress/e2e/*.cy.ts` – e2e specs; `cypress/support/e2e.ts` holds the custom commands. Discord is stubbed with `cy.intercept`, never called for real.
 - `src/styles/app.css` – app styling via CSS variables. `src/styles/preview.css` is a pruned port of the discord-components stylesheet; only touch it for preview fidelity.
@@ -33,5 +33,6 @@ CI (`.github/workflows/ci.yml`) runs typecheck, build and the Cypress suite on e
 - Keep dependencies minimal. Prefer a few lines of code over a new package.
 - Embed/field objects carry a numeric `id` used only for Vue keys; it must never reach the webhook payload.
 - Optional nested embed objects (`author`, `footer`, `image`, `thumbnail`) are set to `undefined` when empty rather than left as `{}`.
-- Drafts store the webhook **id** only, never the token. Saved webhooks (which do hold the token) are never included in draft exports.
+- Drafts store the webhook **id** only, never the token. Saved webhooks (which do hold the token) are never included in draft exports. Draft exports do carry the referenced servers (name + guild id) so imports can regroup by name.
+- `servers.ts` imports from `webhooks.ts` and `drafts.ts` (to ungroup on delete); those two must not import `servers.ts` back, or the module graph cycles.
 - Embed cards carry the `embed-card` class and field cards `field-card`; tests select on those. The publish panel also uses `.card`, so never select embeds with a bare `.card`.

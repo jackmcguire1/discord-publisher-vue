@@ -15,6 +15,8 @@ export interface Draft {
   createdAt: string;
   updatedAt: string;
   message: Message;
+  /** Server this draft is filed under, or null if unassigned. */
+  serverId: string | null;
   published?: PublishedRef & { publishedAt: string };
 }
 
@@ -23,6 +25,8 @@ export interface DraftsFile {
   version: 1;
   exportedAt: string;
   drafts: Draft[];
+  /** Servers referenced by the drafts, so names survive the move to another browser. */
+  servers?: { id: string; name: string; guildId: string }[];
 }
 
 const state = ref<Draft[]>(load<Draft[]>("drafts", []));
@@ -46,9 +50,9 @@ export function getDraft(id: string | null): Draft | undefined {
   return id ? state.value.find((d) => d.id === id) : undefined;
 }
 
-export function createDraft(name: string, message: Message): Draft {
+export function createDraft(name: string, message: Message, serverId: string | null = null): Draft {
   const now = new Date().toISOString();
-  const draft: Draft = { id: newId(), name: name.trim() || "Untitled", createdAt: now, updatedAt: now, message: clone(message) };
+  const draft: Draft = { id: newId(), name: name.trim() || "Untitled", createdAt: now, updatedAt: now, message: clone(message), serverId };
   state.value.push(draft);
   return draft;
 }
@@ -68,6 +72,18 @@ export function renameDraft(id: string, name: string) {
   d.updatedAt = new Date().toISOString();
 }
 
+export function setDraftServer(id: string, serverId: string | null) {
+  const d = getDraft(id);
+  if (!d) return;
+  d.serverId = serverId;
+  d.updatedAt = new Date().toISOString();
+}
+
+/** Unassign every draft that was filed under a deleted server. */
+export function clearDraftServer(serverId: string) {
+  for (const d of state.value) if (d.serverId === serverId) d.serverId = null;
+}
+
 export function setDraftPublished(id: string, ref: PublishedRef | null) {
   const d = getDraft(id);
   if (!d) return;
@@ -78,20 +94,26 @@ export function setDraftPublished(id: string, ref: PublishedRef | null) {
 export function duplicateDraft(id: string): Draft | undefined {
   const d = getDraft(id);
   if (!d) return;
-  return createDraft(`${d.name} (copy)`, d.message);
+  return createDraft(`${d.name} (copy)`, d.message, d.serverId);
 }
 
 export function deleteDraft(id: string) {
   state.value = state.value.filter((d) => d.id !== id);
 }
 
-export function exportDrafts(ids?: string[]): DraftsFile {
+export function exportDrafts(
+  ids?: string[],
+  resolveServer: (id: string) => { id: string; name: string; guildId: string } | undefined = () => undefined
+): DraftsFile {
   const chosen = ids ? state.value.filter((d) => ids.includes(d.id)) : state.value;
+  const serverIds = [...new Set(chosen.map((d) => d.serverId).filter((x): x is string => !!x))];
+  const servers = serverIds.map(resolveServer).filter((s): s is NonNullable<typeof s> => !!s);
   return {
     format: "discord-publisher-drafts",
     version: 1,
     exportedAt: new Date().toISOString(),
     drafts: clone(chosen),
+    servers: servers.length ? servers : undefined,
   };
 }
 
@@ -99,9 +121,18 @@ export function exportDrafts(ids?: string[]): DraftsFile {
  * Accepts a drafts export file, a bare array of drafts, or a single raw
  * webhook payload. Returns how many drafts were added.
  */
-export function importDrafts(raw: unknown, fallbackName = "Imported"): number {
+export function importDrafts(
+  raw: unknown,
+  fallbackName = "Imported",
+  /** Maps a server from the file to a local server id (matching by name, creating if needed). */
+  mapServer: (server: { name: string; guildId?: string }) => string | null = () => null
+): number {
   let incoming: unknown[] = [];
   const r = raw as any;
+  const fileServers: Record<string, { name: string; guildId?: string }> = {};
+  if (r && Array.isArray(r.servers)) {
+    for (const s of r.servers) if (s && typeof s.id === "string" && typeof s.name === "string") fileServers[s.id] = s;
+  }
   if (r && Array.isArray(r.drafts)) incoming = r.drafts;
   else if (Array.isArray(r)) incoming = r;
   else if (r && typeof r === "object") incoming = [r];
@@ -118,6 +149,10 @@ export function importDrafts(raw: unknown, fallbackName = "Imported"): number {
       createdAt: looksLikeDraft && typeof item.createdAt === "string" ? item.createdAt : now,
       updatedAt: now,
       message,
+      serverId:
+        looksLikeDraft && typeof item.serverId === "string" && fileServers[item.serverId]
+          ? mapServer(fileServers[item.serverId])
+          : null,
       published:
         looksLikeDraft && item.published && typeof item.published.messageId === "string"
           ? item.published

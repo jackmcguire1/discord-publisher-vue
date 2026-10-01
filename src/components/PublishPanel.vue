@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
 import { settings, webhookInfo } from "../stores/settings";
-import { savedWebhooks, getWebhook, selectWebhook, webhookByDiscordId } from "../stores/webhooks";
+import { savedWebhooks, getWebhook, selectWebhook, webhookByDiscordId, selectedWebhookServerId } from "../stores/webhooks";
+import { servers, getServer, guildIdFor } from "../stores/servers";
 import { message, isValid, errors, currentDraftId } from "../stores/message";
-import { getDraft, createDraft, updateDraftMessage, setDraftPublished } from "../stores/drafts";
+import { getDraft, createDraft, updateDraftMessage, setDraftPublished, setDraftServer } from "../stores/drafts";
 import { sendMessage, editMessage, deleteMessage, messageLink, type DiscordApiError } from "../discord/webhook";
 import { toast } from "../stores/toasts";
 import { formatDateTime } from "../util";
@@ -14,6 +15,20 @@ const emit = defineEmits<{ manage: [] }>();
 const showUrl = ref(false);
 const selected = computed(() => getWebhook(settings.value.webhookId));
 const publishedVia = computed(() => webhookByDiscordId(published.value?.webhookId));
+const selectedServer = computed(() => getServer(selected.value?.serverId));
+
+/** Webhooks grouped by server for the <optgroup> dropdown; ungrouped ones listed flat. */
+const webhookGroups = computed(() =>
+  servers.value
+    .map((s) => ({ server: s, webhooks: savedWebhooks.value.filter((w) => w.serverId === s.id) }))
+    .filter((g) => g.webhooks.length)
+);
+const ungroupedWebhooks = computed(() =>
+  savedWebhooks.value.filter((w) => !w.serverId || !getServer(w.serverId))
+);
+const publishedLink = computed(() =>
+  published.value ? messageLink(published.value, guildIdFor(draft.value?.serverId)) : "#"
+);
 
 function onPick(e: Event) {
   selectWebhook((e.target as HTMLSelectElement).value || null);
@@ -43,14 +58,17 @@ function describe(e: unknown): string {
 
 /** Make sure a draft exists so the publish can be tracked. */
 function ensureDraft(): string {
-  if (currentDraftId.value && getDraft(currentDraftId.value)) {
+  const existing = getDraft(currentDraftId.value);
+  if (currentDraftId.value && existing) {
     updateDraftMessage(currentDraftId.value, message.value);
+    // File an unassigned draft under the server of the webhook it was published through.
+    if (!existing.serverId && selectedWebhookServerId()) setDraftServer(currentDraftId.value, selectedWebhookServerId());
     return currentDraftId.value;
   }
   const first = message.value.embeds[0];
   const name =
     first?.title || message.value.content.split("\n")[0].slice(0, 60) || `Message ${new Date().toLocaleString()}`;
-  const d = createDraft(name, message.value);
+  const d = createDraft(name, message.value, selectedWebhookServerId());
   currentDraftId.value = d.id;
   toast("info", "Draft saved", `Tracking this message as "${d.name}".`);
   return d.id;
@@ -108,11 +126,21 @@ async function remove() {
   <section class="card">
     <div class="card-body" style="border-top: none">
       <div class="publish-grid">
-        <Field label="Webhook" :hint="selected?.description || (savedWebhooks.length ? `${savedWebhooks.length} saved` : 'none saved yet')">
+        <Field label="Webhook" :hint="[selectedServer?.name, selected?.description].filter(Boolean).join(' · ') || (savedWebhooks.length ? `${savedWebhooks.length} saved` : 'none saved yet')">
           <div class="row row-nowrap">
             <select class="input grow" :value="settings.webhookId ?? ''" @change="onPick">
               <option value="">Custom URL</option>
-              <option v-for="w in savedWebhooks" :key="w.id" :value="w.id">{{ w.name }}</option>
+              <optgroup v-for="g in webhookGroups" :key="g.server.id" :label="g.server.name">
+                <option v-for="w in g.webhooks" :key="w.id" :value="w.id">{{ w.name }}</option>
+              </optgroup>
+              <template v-if="ungroupedWebhooks.length">
+                <optgroup v-if="webhookGroups.length" label="No server">
+                  <option v-for="w in ungroupedWebhooks" :key="w.id" :value="w.id">{{ w.name }}</option>
+                </optgroup>
+                <template v-else>
+                  <option v-for="w in ungroupedWebhooks" :key="w.id" :value="w.id">{{ w.name }}</option>
+                </template>
+              </template>
             </select>
             <button class="btn btn-ghost btn-sm" @click="emit('manage')">Manage</button>
           </div>
@@ -166,7 +194,7 @@ async function remove() {
         <span>
           Published {{ formatDateTime(published.publishedAt) }}<template v-if="publishedVia"> via <strong>{{ publishedVia.name }}</strong></template> ·
           message <code class="mono">{{ published.messageId }}</code> ·
-          <a :href="messageLink(published)" target="_blank" rel="noreferrer">open in Discord</a>
+          <a :href="publishedLink" target="_blank" rel="noreferrer">open in Discord</a>
           <template v-if="!canEditPublished"> · <span class="muted">different webhook configured, editing disabled</span></template>
         </span>
       </div>

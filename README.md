@@ -43,6 +43,7 @@ Live site: **https://jackmcguire1.github.io/discord-publisher-vue/**
 ### Publishing
 
 - **Saved webhooks**: give each webhook URL a nickname and description, then pick the destination from a dropdown. Add, edit and delete them from the Manage dialog, or save a URL you have just typed with one click.
+- **Servers**: group webhooks by Discord server (or organisation). The dropdown groups by server, drafts are filed under the server they were published to, and an optional Discord server ID makes "open in Discord" links point at the right place.
 - Or paste a webhook URL directly. Either way it is stored in your browser and masked in the UI.
 - Optional **thread ID** for posting into forum posts or threads.
 - **Publish** sends the message and records the returned message ID.
@@ -60,6 +61,7 @@ Live site: **https://jackmcguire1.github.io/discord-publisher-vue/**
 - Save, rename, duplicate, delete, export and import drafts.
 - Publishing automatically creates a draft if you have not saved one, so every send is tracked.
 - Drafts record when they were last updated and when and where they were published.
+- Drafts are grouped by server. A published draft is filed under its webhook's server automatically; you can move any draft between servers from the list.
 - Export one draft or all of them as JSON and import them on another machine or browser.
 
 ## Quick start
@@ -91,6 +93,8 @@ Open http://localhost:5173. Other scripts:
 In Discord, open the channel settings, go to **Integrations → Webhooks**, create one and copy its URL. It looks like `https://discord.com/api/webhooks/<id>/<token>`. Treat the token like a password: anyone with the URL can post to that channel.
 
 In the editor, click **Manage** next to the Webhook dropdown, give the webhook a nickname (for example "Announcements") and an optional description, and paste the URL. It is selected automatically. Add as many as you like and switch between them from the dropdown. If you would rather not save it, choose **Custom URL** and paste it into the **Webhook URL** box; a **Save…** button appears if you change your mind.
+
+If you publish to more than one Discord server, add each one under **Servers** in the same dialog and assign webhooks to it. The dropdown then groups webhooks by server, and drafts are filed under the server they were published to. Adding the Discord server ID (Server Settings → Widget, or right-click the server with developer mode on) is optional but makes the "open in Discord" links resolve directly.
 
 ### 2. Build the message
 
@@ -139,6 +143,7 @@ End-to-end coverage lives in `cypress/e2e/` and runs against the dev server on p
 
 - editor behaviour: starter message, markdown rendering, adding/removing embeds and fields, limits and counters, undo/redo, clear, persistence across reloads
 - saved webhooks: add, edit, delete, select, auto-select on save, save a typed URL, persistence
+- servers: grouping in the dialog and dropdown, auto-filing published drafts, moving drafts, deleting a server, Discord links, export/import round-trip
 - publishing: URL validation, `POST …?wait=true` payload shape, thread IDs, `PATCH` edits without identity fields, `DELETE`, webhook mismatch handling, Discord error surfacing
 - JSON and cURL export, pasting and applying JSON, invalid JSON handling
 - drafts: save, update, save-as-new, load, rename, duplicate, delete, published state, import of export files and bare payloads
@@ -189,7 +194,8 @@ All state lives in `localStorage` under the `discord-publisher:` prefix:
 | `current`  | The message currently in the editor and which draft it came from |
 | `drafts`   | Saved drafts, including published message references            |
 | `settings` | Active webhook URL, which saved webhook it came from, thread ID  |
-| `webhooks` | Saved webhooks: nickname, description and URL                   |
+| `webhooks` | Saved webhooks: nickname, description, URL and server           |
+| `servers`  | Servers: name and optional Discord server ID                    |
 
 Nothing is sent anywhere except to the Discord webhook you configure.
 
@@ -223,7 +229,8 @@ src/
 │  ├─ message.ts       Current message, validation, undo/redo
 │  ├─ drafts.ts        Saved drafts and import/export
 │  ├─ settings.ts      Active webhook URL and thread ID
-│  ├─ webhooks.ts      Saved webhooks (nickname, description, URL)
+│  ├─ webhooks.ts      Saved webhooks (nickname, description, URL, server)
+│  ├─ servers.ts       Servers that group webhooks and drafts
 │  ├─ toasts.ts        Notifications
 │  └─ persist.ts       localStorage helpers
 ├─ components/
@@ -238,7 +245,7 @@ src/
 ├─ App.vue
 └─ main.ts
 cypress/
-├─ e2e/              editor, publish, webhooks, export-import and drafts specs
+├─ e2e/              editor, publish, webhooks, servers, export-import and drafts specs
 └─ support/e2e.ts    custom commands (visitClean, stubDiscord, setWebhook, …)
 ```
 

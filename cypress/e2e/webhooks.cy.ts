@@ -27,8 +27,8 @@ describe("saved webhooks", () => {
     cy.contains("button", "Manage").click();
     addWebhook("Announcements", "Main server #announcements", WEBHOOK);
     cy.toast("Webhook saved");
-    cy.get(".modal .draft").should("have.length", 1).and("contain.text", "Announcements").and("contain.text", "Main server");
-    cy.get(".modal .draft .tag").should("contain.text", "selected");
+    cy.get(".modal .webhook-item").should("have.length", 1).and("contain.text", "Announcements").and("contain.text", "Main server");
+    cy.get(".modal .webhook-item .tag").should("contain.text", "selected");
     cy.get("body").type("{esc}");
 
     cy.get("select.input").find("option:selected").should("have.text", "Announcements");
@@ -45,7 +45,7 @@ describe("saved webhooks", () => {
     cy.contains("button", "Manage").click();
     addWebhook("Announcements", "", WEBHOOK);
     addWebhook("Staff", "Private staff channel", SECOND);
-    cy.get(".modal .draft").should("have.length", 2);
+    cy.get(".modal .webhook-item").should("have.length", 2);
     cy.get("body").type("{esc}");
 
     cy.get("select.input").find("option").should("have.length", 3);
@@ -87,12 +87,12 @@ describe("saved webhooks", () => {
   it("edits a webhook and keeps the active URL in sync", () => {
     cy.contains("button", "Manage").click();
     addWebhook("Announcements", "", WEBHOOK);
-    cy.contains(".modal .draft", "Announcements").contains("button", "Edit").click();
+    cy.contains(".modal .webhook-item", "Announcements").contains("button", "Edit").click();
     cy.get('.modal input[placeholder="e.g. Announcements"]').clear().type("Renamed hook", { delay: 0 });
     cy.get('.modal input[placeholder^="https://discord.com/api/webhooks"]').clear().type(SECOND, { delay: 0 });
     cy.contains(".modal button", "Save changes").click();
     cy.toast("Webhook updated");
-    cy.get(".modal .draft-name").should("have.text", "Renamed hook");
+    cy.get(".modal .webhook-item .draft-name").should("have.text", "Renamed hook");
     cy.get("body").type("{esc}");
     cy.get("select.input").find("option:selected").should("have.text", "Renamed hook");
     cy.get('input[placeholder^="https://discord.com/api/webhooks"]').should("have.value", SECOND);
@@ -101,8 +101,8 @@ describe("saved webhooks", () => {
   it("deletes a webhook and falls back to custom URL", () => {
     cy.contains("button", "Manage").click();
     addWebhook("Announcements", "", WEBHOOK);
-    cy.get(".modal .draft .btn-danger").click();
-    cy.get(".modal .draft").should("not.exist");
+    cy.get(".modal .webhook-item .btn-danger").click();
+    cy.get(".modal .webhook-item").should("not.exist");
     cy.get("body").type("{esc}");
     cy.get("select.input").find("option").should("have.length", 1);
     cy.get("select.input").find("option:selected").should("have.text", "Custom URL");

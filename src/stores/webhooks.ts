@@ -12,6 +12,8 @@ export interface SavedWebhook {
   name: string;
   description: string;
   url: string;
+  /** Server this webhook belongs to, or null if ungrouped. */
+  serverId: string | null;
   createdAt: string;
 }
 
@@ -34,7 +36,7 @@ export function webhookByDiscordId(discordId: string | undefined): SavedWebhook 
   return savedWebhooks.value.find((w) => parseWebhookUrl(w.url)?.id === discordId);
 }
 
-export function addWebhook(input: { name: string; description?: string; url: string }): SavedWebhook {
+export function addWebhook(input: { name: string; description?: string; url: string; serverId?: string | null }): SavedWebhook {
   const info = parseWebhookUrl(input.url);
   if (!info) throw new Error("Not a Discord webhook URL");
   const w: SavedWebhook = {
@@ -42,13 +44,14 @@ export function addWebhook(input: { name: string; description?: string; url: str
     name: input.name.trim() || `Webhook ${info.id.slice(-4)}`,
     description: (input.description ?? "").trim(),
     url: info.url,
+    serverId: input.serverId ?? null,
     createdAt: new Date().toISOString(),
   };
   savedWebhooks.value.push(w);
   return w;
 }
 
-export function updateWebhook(id: string, patch: { name?: string; description?: string; url?: string }) {
+export function updateWebhook(id: string, patch: { name?: string; description?: string; url?: string; serverId?: string | null }) {
   const w = getWebhook(id);
   if (!w) return;
   if (patch.url !== undefined) {
@@ -58,6 +61,17 @@ export function updateWebhook(id: string, patch: { name?: string; description?: 
   }
   if (patch.name !== undefined) w.name = patch.name.trim() || w.name;
   if (patch.description !== undefined) w.description = patch.description.trim();
+  if (patch.serverId !== undefined) w.serverId = patch.serverId;
+}
+
+/** Ungroup every webhook that pointed at a deleted server. */
+export function clearWebhookServer(serverId: string) {
+  for (const w of savedWebhooks.value) if (w.serverId === serverId) w.serverId = null;
+}
+
+/** The server of the webhook currently selected in the publish panel, if any. */
+export function selectedWebhookServerId(): string | null {
+  return getWebhook(settings.value.webhookId)?.serverId ?? null;
 }
 
 export function deleteWebhook(id: string) {

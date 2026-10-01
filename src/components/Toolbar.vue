@@ -3,6 +3,7 @@ import { computed } from "vue";
 import { message, currentDraftId, undo, redo, canUndo, canRedo, replaceMessage } from "../stores/message";
 import { drafts, getDraft, createDraft, updateDraftMessage } from "../stores/drafts";
 import { emptyMessage } from "../discord/schema";
+import { selectedWebhookServerId } from "../stores/webhooks";
 import { toast } from "../stores/toasts";
 
 const emit = defineEmits<{ open: [view: "json" | "curl" | "drafts"] }>();
@@ -22,7 +23,7 @@ function saveAsNew() {
   const suggested = message.value.embeds[0]?.title || message.value.content.split("\n")[0].slice(0, 60) || "Untitled";
   const name = prompt("Draft name", suggested);
   if (name === null) return;
-  const d = createDraft(name, message.value);
+  const d = createDraft(name, message.value, selectedWebhookServerId());
   currentDraftId.value = d.id;
   toast("success", "Draft saved", d.name);
 }
