@@ -99,7 +99,7 @@ If you publish to more than one Discord server, add each one under **Servers** i
 
 ### 2. Build the message
 
-If you post as the same brand each time, open **Authors** in the toolbar and save its name, link and avatar. The "Apply saved author" dropdown above the webhook identity fields fills in username and avatar; the one in each embed's Author section fills in name, link and icon. Both places also offer **Save as author…** once you have typed something.
+If you post as the same brand each time, open **Authors** in the toolbar and save its name, link and avatar. The author dropdown above the webhook identity fields fills in username and avatar; the one in each embed's Author section fills in name, link and icon. The list shows each author's avatar, and the dropdown keeps showing which author is in use for as long as the fields still match it. Both places also offer **Save as author…** once you have typed something.
 
 Fill in the content and add embeds. The preview on the right updates as you type. Red text under a field means Discord would reject the message; the publish button stays disabled until everything is fixed.
 

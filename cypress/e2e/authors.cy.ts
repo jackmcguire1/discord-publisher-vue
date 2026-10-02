@@ -15,7 +15,7 @@ describe("authors", () => {
   beforeEach(() => cy.visitClean());
 
   it("starts with no authors and disabled pickers", () => {
-    cy.get(".author-select").should("have.length", 2).and("be.disabled");
+    cy.get(".author-toggle").should("have.length", 2).and("be.disabled").and("contain.text", "No saved authors");
     cy.contains("button", "Authors").find(".tag").should("have.text", "0");
   });
 
@@ -27,7 +27,7 @@ describe("authors", () => {
     cy.get(".modal .author-avatar").should("have.attr", "src", AVATAR);
     cy.get("body").type("{esc}");
     cy.contains("button", "Authors").find(".tag").should("have.text", "1");
-    cy.get(".author-select").should("not.be.disabled");
+    cy.get(".author-toggle").should("not.be.disabled").and("contain.text", "Apply saved author");
   });
 
   it("applies an author as the webhook identity", () => {
@@ -35,12 +35,19 @@ describe("authors", () => {
     addAuthor("Release bot", "", AVATAR);
     cy.get("body").type("{esc}");
 
-    cy.get(".author-select").first().select("Release bot");
+    cy.get(".author-toggle").first().click();
+    cy.get(".author-menu .author-option").should("have.length", 1).find("img.author-mini").should("have.attr", "src", AVATAR);
+    cy.contains(".author-option", "Release bot").click();
+    cy.get(".author-menu").should("not.exist");
     cy.get('input[placeholder^="Defaults to the webhook"]').should("have.value", "Release bot");
     cy.get(".discord-author-username").should("have.text", "Release bot");
     cy.get(".discord-author-avatar img").should("have.attr", "src", AVATAR);
-    // The picker resets so the same author can be applied again later.
-    cy.get(".author-select").first().find("option:selected").should("contain.text", "Apply saved author");
+    // The selection stays visible, with the avatar, while the fields still match.
+    cy.get(".author-toggle").first().should("have.class", "has-selection").and("contain.text", "Release bot");
+    cy.get(".author-toggle").first().find("img.author-mini").should("have.attr", "src", AVATAR);
+    // Editing the fields away from the saved values clears the selection.
+    cy.get('input[placeholder^="Defaults to the webhook"]').type(" edited", { delay: 0 });
+    cy.get(".author-toggle").first().should("not.have.class", "has-selection").and("contain.text", "Apply saved author");
   });
 
   it("applies an author to an embed's author block", () => {
@@ -48,7 +55,9 @@ describe("authors", () => {
     addAuthor("Release bot", "https://example.com/bot", AVATAR);
     cy.get("body").type("{esc}");
 
-    cy.get(".embed-card .author-select").select("Release bot");
+    cy.get(".embed-card .author-toggle").click();
+    cy.contains(".embed-card .author-option", "Release bot").click();
+    cy.get(".embed-card .author-toggle").should("contain.text", "Release bot").find("img").should("have.attr", "src", AVATAR);
     cy.get(".discord-embed-author").should("contain.text", "Release bot");
     cy.get(".discord-embed-author a").should("have.attr", "href", "https://example.com/bot");
     cy.get(".discord-embed-author img").should("have.attr", "src", AVATAR);
@@ -63,6 +72,9 @@ describe("authors", () => {
     cy.contains(".modal button", "Add author").click();
     cy.toast("Author saved");
     cy.get(".modal .author-item").should("have.length", 1);
+    cy.get("body").type("{esc}");
+    // The embed's values now match the saved author, so it shows as selected.
+    cy.get(".embed-card .author-toggle").should("have.class", "has-selection").and("contain.text", "Stat-Milestones");
   });
 
   it("saves the webhook identity as an author, prefilled", () => {
@@ -94,7 +106,23 @@ describe("authors", () => {
     cy.get(".modal .author-item .btn-danger").click();
     cy.get(".modal .author-item").should("not.exist");
     cy.get("body").type("{esc}");
-    cy.get(".author-select").should("be.disabled");
+    cy.get(".author-toggle").should("be.disabled");
+  });
+
+  it("closes the list on outside click and Escape without closing anything else", () => {
+    cy.contains("button", "Authors").click();
+    addAuthor("One", "", "");
+    cy.get("body").type("{esc}");
+    cy.get(".author-toggle").first().click();
+    cy.get(".author-menu").should("be.visible");
+    cy.get("body").type("{esc}");
+    cy.get(".author-menu").should("not.exist");
+    cy.get(".author-toggle").first().click();
+    cy.get("h1").click();
+    cy.get(".author-menu").should("not.exist");
+    cy.get(".author-toggle").first().click();
+    cy.contains(".author-menu button", "Manage authors…").click();
+    cy.get(".modal").should("be.visible");
   });
 
   it("persists authors across reloads", () => {
@@ -102,6 +130,7 @@ describe("authors", () => {
     addAuthor("Persisted", "", "");
     cy.get("body").type("{esc}");
     cy.reload();
-    cy.get(".author-select").first().find("option").should("contain.text", "Persisted");
+    cy.get(".author-toggle").first().click();
+    cy.get(".author-option").should("contain.text", "Persisted");
   });
 });
