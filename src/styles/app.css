@@ -233,7 +233,7 @@ select.input option { background: var(--bg-0); color: var(--text-strong); }
 .author-mini { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; flex: none; background: var(--bg-4); }
 .author-mini-empty { display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: var(--text-muted); }
 .author-menu {
-  position: absolute; left: 0; top: calc(100% + 4px); z-index: 30; min-width: 260px; max-width: 360px;
+  position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; min-width: 260px; max-width: 360px;
   max-height: 280px; overflow: auto; background: var(--bg-1); border: 1px solid var(--border);
   border-radius: var(--radius); box-shadow: 0 8px 24px rgba(0,0,0,.45); padding: 4px;
 }
