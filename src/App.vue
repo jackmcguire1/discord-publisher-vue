@@ -10,6 +10,8 @@ import JsonModal from "./components/JsonModal.vue";
 import CurlModal from "./components/CurlModal.vue";
 import DraftsModal from "./components/DraftsModal.vue";
 import WebhooksModal from "./components/WebhooksModal.vue";
+import AuthorsModal from "./components/AuthorsModal.vue";
+import { authorsDialog } from "./stores/authors";
 import Toasts from "./components/Toasts.vue";
 
 type View = "json" | "curl" | "drafts" | "webhooks" | null;
@@ -19,7 +21,7 @@ const draft = computed(() => getDraft(currentDraftId.value));
 function onKey(e: KeyboardEvent) {
   const target = e.target as HTMLElement | null;
   const typing = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA");
-  if (typing || view.value) return; // let native undo handle text fields and modals
+  if (typing || view.value || authorsDialog.value) return; // let native undo handle text fields and modals
   const mod = e.metaKey || e.ctrlKey;
   if (mod && e.key.toLowerCase() === "z") {
     e.preventDefault();
@@ -55,6 +57,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKey));
     <CurlModal v-if="view === 'curl'" @close="view = null" />
     <DraftsModal v-if="view === 'drafts'" @close="view = null" />
     <WebhooksModal v-if="view === 'webhooks'" @close="view = null" />
+    <AuthorsModal v-if="authorsDialog" :key="JSON.stringify(authorsDialog.prefill)" />
     <Toasts />
   </div>
 </template>

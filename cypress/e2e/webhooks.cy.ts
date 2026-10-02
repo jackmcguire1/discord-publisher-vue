@@ -19,7 +19,7 @@ describe("saved webhooks", () => {
   });
 
   it("starts with only the custom URL option", () => {
-    cy.get("select.input option").should("have.length", 1).and("contain.text", "Custom URL");
+    cy.get("select.webhook-select option").should("have.length", 1).and("contain.text", "Custom URL");
     cy.contains(".field-label", "Webhook").should("contain.text", "none saved yet");
   });
 
@@ -31,7 +31,7 @@ describe("saved webhooks", () => {
     cy.get(".modal .webhook-item .tag").should("contain.text", "selected");
     cy.get("body").type("{esc}");
 
-    cy.get("select.input").find("option:selected").should("have.text", "Announcements");
+    cy.get("select.webhook-select").find("option:selected").should("have.text", "Announcements");
     cy.contains(".field-label", "Webhook").should("contain.text", "Main server #announcements");
     cy.contains(".field-label", "Webhook URL").should("contain.text", "from saved webhook");
     cy.get('input[placeholder^="https://discord.com/api/webhooks"]').should("have.value", WEBHOOK);
@@ -48,17 +48,17 @@ describe("saved webhooks", () => {
     cy.get(".modal .webhook-item").should("have.length", 2);
     cy.get("body").type("{esc}");
 
-    cy.get("select.input").find("option").should("have.length", 3);
-    cy.get("select.input").select("Staff");
+    cy.get("select.webhook-select").find("option").should("have.length", 3);
+    cy.get("select.webhook-select").select("Staff");
     cy.get('input[placeholder^="https://discord.com/api/webhooks"]').should("have.value", SECOND);
     cy.contains(".field-label", "Webhook").should("contain.text", "Private staff channel");
 
     // Typing a URL by hand detaches from the saved entry.
     cy.setWebhook("https://discord.com/api/webhooks/333333333333333333/typed");
-    cy.get("select.input").find("option:selected").should("have.text", "Custom URL");
+    cy.get("select.webhook-select").find("option:selected").should("have.text", "Custom URL");
     cy.contains("button", "Save…").should("be.visible");
 
-    cy.get("select.input").select("Announcements");
+    cy.get("select.webhook-select").select("Announcements");
     cy.get('input[placeholder^="https://discord.com/api/webhooks"]').should("have.value", WEBHOOK);
   });
 
@@ -70,7 +70,7 @@ describe("saved webhooks", () => {
     cy.contains(".modal button", "Add webhook").click();
     cy.toast("Webhook saved");
     cy.get("body").type("{esc}");
-    cy.get("select.input").find("option:selected").should("have.text", "Typed one");
+    cy.get("select.webhook-select").find("option:selected").should("have.text", "Typed one");
   });
 
   it("validates the URL and requires a nickname", () => {
@@ -94,7 +94,7 @@ describe("saved webhooks", () => {
     cy.toast("Webhook updated");
     cy.get(".modal .webhook-item .draft-name").should("have.text", "Renamed hook");
     cy.get("body").type("{esc}");
-    cy.get("select.input").find("option:selected").should("have.text", "Renamed hook");
+    cy.get("select.webhook-select").find("option:selected").should("have.text", "Renamed hook");
     cy.get('input[placeholder^="https://discord.com/api/webhooks"]').should("have.value", SECOND);
   });
 
@@ -104,8 +104,8 @@ describe("saved webhooks", () => {
     cy.get(".modal .webhook-item .btn-danger").click();
     cy.get(".modal .webhook-item").should("not.exist");
     cy.get("body").type("{esc}");
-    cy.get("select.input").find("option").should("have.length", 1);
-    cy.get("select.input").find("option:selected").should("have.text", "Custom URL");
+    cy.get("select.webhook-select").find("option").should("have.length", 1);
+    cy.get("select.webhook-select").find("option:selected").should("have.text", "Custom URL");
   });
 
   it("persists saved webhooks and the selection across reloads", () => {
@@ -113,8 +113,8 @@ describe("saved webhooks", () => {
     addWebhook("Announcements", "", WEBHOOK);
     cy.get("body").type("{esc}");
     cy.reload();
-    cy.get("select.input").find("option").should("have.length", 2);
-    cy.get("select.input").find("option:selected").should("have.text", "Announcements");
+    cy.get("select.webhook-select").find("option").should("have.length", 2);
+    cy.get("select.webhook-select").find("option:selected").should("have.text", "Announcements");
     cy.get('input[placeholder^="https://discord.com/api/webhooks"]').should("have.value", WEBHOOK);
   });
 });

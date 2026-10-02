@@ -44,9 +44,9 @@ describe("servers", () => {
     cy.get(".modal .webhook-group").last().find(".group-label").should("have.text", "No server");
     cy.get("body").type("{esc}");
 
-    cy.get("select.input optgroup").should("have.length", 2);
-    cy.get('select.input optgroup[label="Stat-Milestones"] option').should("have.length", 1).and("have.text", "Announcements");
-    cy.get('select.input optgroup[label="No server"] option').should("have.text", "Loose hook");
+    cy.get("select.webhook-select optgroup").should("have.length", 2);
+    cy.get('select.webhook-select optgroup[label="Stat-Milestones"] option').should("have.length", 1).and("have.text", "Announcements");
+    cy.get('select.webhook-select optgroup[label="No server"] option').should("have.text", "Loose hook");
     cy.contains(".field-label", "Webhook").should("contain.text", "Stat-Milestones");
   });
 
@@ -92,8 +92,8 @@ describe("servers", () => {
     cy.get(".modal .webhook-item").should("have.length", 1);
     cy.get(".modal .webhook-group .group-label").should("have.text", "No server");
     cy.get("body").type("{esc}");
-    cy.get("select.input optgroup").should("not.exist");
-    cy.get("select.input option").should("have.length", 2);
+    cy.get("select.webhook-select optgroup").should("not.exist");
+    cy.get("select.webhook-select option").should("have.length", 2);
   });
 
   it("edits a server name and keeps it on the webhook", () => {
@@ -105,7 +105,7 @@ describe("servers", () => {
     cy.toast("Server updated");
     cy.get(".modal .webhook-group .group-label").should("have.text", "New name");
     cy.get("body").type("{esc}");
-    cy.get('select.input optgroup[label="New name"]').should("exist");
+    cy.get('select.webhook-select optgroup[label="New name"]').should("exist");
   });
 
   it("round-trips server names through draft export and import", () => {

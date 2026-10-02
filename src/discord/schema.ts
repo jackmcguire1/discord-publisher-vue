@@ -12,6 +12,10 @@ export function uniqueId(): number {
 const VARIABLE_RE = /\{\{[^}]+\}\}/;
 const HOSTNAME_RE = /\.[a-zA-Z]{2,}$/;
 
+export function isHttpUrl(v: string): boolean {
+  return isUrl(v);
+}
+
 function isUrl(v: string): boolean {
   if (VARIABLE_RE.test(v)) return true;
   try {

@@ -5,6 +5,16 @@ import { errors, errorAt, moveEmbed, duplicateEmbed, removeEmbed, addField } fro
 import { colorIntToHex, colorHexToInt, isoToLocalInput, localInputToIso } from "../util";
 import Field from "./Field.vue";
 import EmbedFieldEditor from "./EmbedFieldEditor.vue";
+import AuthorPicker from "./AuthorPicker.vue";
+import type { Author } from "../stores/authors";
+
+function applyAuthor(a: Author) {
+  props.embed.author = {
+    name: a.name,
+    url: a.url || undefined,
+    icon_url: a.avatarUrl || undefined,
+  };
+}
 
 const props = defineProps<{ embed: Embed; index: number; total: number }>();
 
@@ -111,7 +121,10 @@ function inputValue(e: Event) { return (e.target as HTMLInputElement).value; }
         </Field>
       </div>
 
-      <h2>Author</h2>
+      <div class="row row-between">
+        <h2 style="margin: 0">Author</h2>
+        <AuthorPicker :current="{ name: embed.author?.name, url: embed.author?.url, avatarUrl: embed.author?.icon_url }" @apply="applyAuthor" />
+      </div>
       <div class="grid-3">
         <Field label="Name" :error="errorAt(`${path}.author.name`)" :count="sub('author','name').length" :max="256">
           <input :value="sub('author', 'name')" class="input" @input="setSub('author', 'name', inputValue($event))" />

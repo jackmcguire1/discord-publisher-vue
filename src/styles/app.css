@@ -220,3 +220,8 @@ select.input option { background: var(--bg-0); color: var(--text-strong); }
 .draft-group + .draft-group, .webhook-group + .webhook-group { margin-top: 4px; }
 .draft-server-select { width: auto; max-width: 150px; padding: 4px 24px 4px 8px; font-size: 12px; }
 .server-form .input { padding: 6px 10px; }
+
+.author-picker { flex-wrap: nowrap; }
+.author-select { width: auto; max-width: 200px; padding: 4px 24px 4px 8px; font-size: 12px; }
+.author-avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; flex: none; background: var(--bg-4); }
+.author-avatar-empty { display: flex; align-items: center; justify-content: center; font-weight: 700; color: var(--text-muted); }

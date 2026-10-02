@@ -28,6 +28,7 @@ Live site: **https://jackmcguire1.github.io/discord-publisher-vue/**
 ### Editing
 
 - Webhook identity: custom **username** and **avatar URL** per message.
+- **Reusable authors**: save a name, link and avatar once, then apply it in one click as the webhook identity or as any embed's author block. Save the values already typed into either place with "Save as author".
 - **Content** with full Discord markdown and a text-to-speech toggle.
 - Up to **10 embeds**, each with title, URL, description, colour, timestamp, author (name, URL, icon), image, thumbnail, footer (text, icon) and up to **25 fields** with inline layout.
 - Reorder, duplicate and delete embeds and fields. Collapse embeds you are not working on.
@@ -98,6 +99,8 @@ If you publish to more than one Discord server, add each one under **Servers** i
 
 ### 2. Build the message
 
+If you post as the same brand each time, open **Authors** in the toolbar and save its name, link and avatar. The "Apply saved author" dropdown above the webhook identity fields fills in username and avatar; the one in each embed's Author section fills in name, link and icon. Both places also offer **Save as author…** once you have typed something.
+
 Fill in the content and add embeds. The preview on the right updates as you type. Red text under a field means Discord would reject the message; the publish button stays disabled until everything is fixed.
 
 ### 3. Publish
@@ -143,6 +146,7 @@ End-to-end coverage lives in `cypress/e2e/` and runs against the dev server on p
 
 - editor behaviour: starter message, markdown rendering, adding/removing embeds and fields, limits and counters, undo/redo, clear, persistence across reloads
 - saved webhooks: add, edit, delete, select, auto-select on save, save a typed URL, persistence
+- authors: add, edit, delete, apply as webhook identity, apply to an embed, prefilled save from either place, validation, persistence
 - servers: grouping in the dialog and dropdown, auto-filing published drafts, moving drafts, deleting a server, Discord links, export/import round-trip
 - publishing: URL validation, `POST …?wait=true` payload shape, thread IDs, `PATCH` edits without identity fields, `DELETE`, webhook mismatch handling, Discord error surfacing
 - JSON and cURL export, pasting and applying JSON, invalid JSON handling
@@ -196,6 +200,7 @@ All state lives in `localStorage` under the `discord-publisher:` prefix:
 | `settings` | Active webhook URL, which saved webhook it came from, thread ID  |
 | `webhooks` | Saved webhooks: nickname, description, URL and server           |
 | `servers`  | Servers: name and optional Discord server ID                    |
+| `authors`  | Reusable authors: name, URL and avatar URL                      |
 
 Nothing is sent anywhere except to the Discord webhook you configure.
 
@@ -231,13 +236,15 @@ src/
 │  ├─ settings.ts      Active webhook URL and thread ID
 │  ├─ webhooks.ts      Saved webhooks (nickname, description, URL, server)
 │  ├─ servers.ts       Servers that group webhooks and drafts
+│  ├─ authors.ts       Reusable authors (name, URL, avatar) and the dialog state
 │  ├─ toasts.ts        Notifications
 │  └─ persist.ts       localStorage helpers
 ├─ components/
 │  ├─ MessageEditor.vue, EmbedEditor.vue, EmbedFieldEditor.vue
 │  ├─ MessagePreview.vue
 │  ├─ PublishPanel.vue, Toolbar.vue
-│  ├─ JsonModal.vue, CurlModal.vue, DraftsModal.vue, WebhooksModal.vue
+│  ├─ JsonModal.vue, CurlModal.vue, DraftsModal.vue, WebhooksModal.vue, AuthorsModal.vue
+│  ├─ AuthorPicker.vue
 │  └─ Field.vue, Modal.vue, Toasts.vue
 ├─ styles/
 │  ├─ app.css          Application styling (CSS variables, dark theme)
@@ -245,7 +252,7 @@ src/
 ├─ App.vue
 └─ main.ts
 cypress/
-├─ e2e/              editor, publish, webhooks, servers, export-import and drafts specs
+├─ e2e/              editor, publish, webhooks, servers, authors, export-import and drafts specs
 └─ support/e2e.ts    custom commands (visitClean, stubDiscord, setWebhook, …)
 ```
 

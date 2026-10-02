@@ -4,6 +4,7 @@ import { message, currentDraftId, undo, redo, canUndo, canRedo, replaceMessage }
 import { drafts, getDraft, createDraft, updateDraftMessage } from "../stores/drafts";
 import { emptyMessage } from "../discord/schema";
 import { selectedWebhookServerId } from "../stores/webhooks";
+import { openAuthors, savedAuthors } from "../stores/authors";
 import { toast } from "../stores/toasts";
 
 const emit = defineEmits<{ open: [view: "json" | "curl" | "drafts"] }>();
@@ -44,6 +45,9 @@ function clear() {
       <button class="btn btn-ghost btn-sm" @click="emit('open', 'curl')">cURL</button>
     </div>
     <div class="row">
+      <button class="btn btn-ghost btn-sm" @click="openAuthors()">
+        Authors <span class="tag">{{ savedAuthors.length }}</span>
+      </button>
       <button class="btn btn-ghost btn-sm" @click="emit('open', 'drafts')">
         Drafts <span class="tag">{{ drafts.length }}</span>
       </button>

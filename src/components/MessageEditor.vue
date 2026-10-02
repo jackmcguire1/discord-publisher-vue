@@ -2,6 +2,13 @@
 import { message, errorAt, addEmbed } from "../stores/message";
 import Field from "./Field.vue";
 import EmbedEditor from "./EmbedEditor.vue";
+import AuthorPicker from "./AuthorPicker.vue";
+import type { Author } from "../stores/authors";
+
+function applyIdentity(a: Author) {
+  message.value.username = a.name || undefined;
+  message.value.avatar_url = a.avatarUrl || undefined;
+}
 
 function inputValue(e: Event) { return (e.target as HTMLInputElement).value; }
 </script>
@@ -9,7 +16,10 @@ function inputValue(e: Event) { return (e.target as HTMLInputElement).value; }
 <template>
   <div class="stack">
     <section>
-      <h2>Webhook identity</h2>
+      <div class="row row-between" style="margin-bottom: 8px">
+        <h2 style="margin: 0">Webhook identity</h2>
+        <AuthorPicker :current="{ name: message.username, avatarUrl: message.avatar_url }" @apply="applyIdentity" />
+      </div>
       <div class="grid-2">
         <Field label="Username" :error="errorAt('username')" :count="message.username?.length ?? 0" :max="80">
           <input :value="message.username ?? ''" class="input" placeholder="Defaults to the webhook's name" @input="message.username = inputValue($event) || undefined" />

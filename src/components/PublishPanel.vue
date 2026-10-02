@@ -128,7 +128,7 @@ async function remove() {
       <div class="publish-grid">
         <Field label="Webhook" :hint="[selectedServer?.name, selected?.description].filter(Boolean).join(' · ') || (savedWebhooks.length ? `${savedWebhooks.length} saved` : 'none saved yet')">
           <div class="row row-nowrap">
-            <select class="input grow" :value="settings.webhookId ?? ''" @change="onPick">
+            <select class="input grow webhook-select" :value="settings.webhookId ?? ''" @change="onPick">
               <option value="">Custom URL</option>
               <optgroup v-for="g in webhookGroups" :key="g.server.id" :label="g.server.name">
                 <option v-for="w in g.webhooks" :key="w.id" :value="w.id">{{ w.name }}</option>
