@@ -1,5 +1,5 @@
 # `mise install` sets up everything the project needs. Java runs the Firebase
 # emulators. Versions match CI (.github/workflows/ci.yml).
 [tools]
-node = "22"
+node = "24"
 java = "temurin-21"
