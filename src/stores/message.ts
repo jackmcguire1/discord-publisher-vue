@@ -56,8 +56,27 @@ watch(
   { deep: true }
 );
 export const isValid = computed(() => Object.keys(errors.value).length === 0);
+
+// A message just started with "New message" is empty and therefore invalid;
+// shouting about that before anyone has typed is noise. Errors stay hidden
+// until the message is first changed (publishing stays blocked regardless).
+const untouchedNew = ref<string | null>(null);
+watch(
+  message,
+  (m) => {
+    if (untouchedNew.value !== null && JSON.stringify(m) !== untouchedNew.value) untouchedNew.value = null;
+  },
+  { deep: true }
+);
+/** Call right after starting a blank message. */
+export function markUntouched() {
+  untouchedNew.value = JSON.stringify(message.value);
+}
+/** Whether validation errors should be shown (false until a new message is first edited). */
+export const showErrors = computed(() => untouchedNew.value === null);
+
 export function errorAt(path: string): string | undefined {
-  return errors.value[path];
+  return showErrors.value ? errors.value[path] : undefined;
 }
 
 // --- undo / redo -------------------------------------------------------------
@@ -123,6 +142,7 @@ export function redo() {
 
 /** Replace the whole message (import, load draft, clear). */
 export function replaceMessage(next: Message, draftId: string | null = null) {
+  untouchedNew.value = null;
   message.value = next;
   currentDraftId.value = draftId;
   errors.value = validateMessage(next);

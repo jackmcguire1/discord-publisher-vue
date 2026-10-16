@@ -62,11 +62,22 @@ describe("editor and preview", () => {
     cy.get(".discord-embed-title").should("have.text", "Renamed");
   });
 
-  it("a new message starts empty and blocks publishing until it has content", () => {
+  it("a new message starts empty and quiet: no errors until edited, but publishing stays blocked", () => {
+    cy.setWebhook();
     cy.contains("button", "New message").click();
     cy.get(".discord-embed").should("not.exist");
+    cy.get(".banner-error").should("not.exist");
+    cy.get(".field-error").should("not.exist");
+    cy.contains("button", /^\s*Publish\s*$/).should("be.disabled");
+
+    // Once edited, validation speaks up (here: typed then cleared, so still empty).
+    cy.get("textarea").first().type("x", { delay: 0 }).clear();
     cy.contains(".banner-error", "validation issue").should("exist");
     cy.contains(".field-error", "Add some content or at least one embed").should("exist");
+
+    cy.get("textarea").first().type("Hello", { delay: 0 });
+    cy.get(".banner-error").should("not.exist");
+    cy.contains("button", /^\s*Publish\s*$/).should("not.be.disabled");
   });
 
   it("persists the message across reloads", () => {

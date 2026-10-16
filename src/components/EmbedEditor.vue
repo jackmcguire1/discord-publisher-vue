@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
 import type { Embed } from "../discord/schema";
-import { errors, errorAt, moveEmbed, duplicateEmbed, removeEmbed, addField } from "../stores/message";
+import { errors, errorAt, showErrors, moveEmbed, duplicateEmbed, removeEmbed, addField } from "../stores/message";
 import { colorIntToHex, colorHexToInt, isoToLocalInput, localInputToIso } from "../util";
 import Field from "./Field.vue";
 import EmbedFieldEditor from "./EmbedFieldEditor.vue";
@@ -28,7 +28,7 @@ const heading = computed(
 /** Does any error path start with this embed's prefix? Used to flag collapsed embeds. */
 const hasError = computed(() => {
   const prefix = path.value + ".";
-  return Object.keys(errors.value).some((k) => k.startsWith(prefix));
+  return showErrors.value && Object.keys(errors.value).some((k) => k.startsWith(prefix));
 });
 
 type Group = "author" | "footer" | "image" | "thumbnail";

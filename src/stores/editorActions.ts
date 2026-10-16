@@ -1,5 +1,5 @@
 import { ref } from "vue";
-import { message, currentDraftId, replaceMessage, isDirty, markClean } from "./message";
+import { message, currentDraftId, replaceMessage, isDirty, markClean, markUntouched } from "./message";
 import { getDraft, createDraft, updateDraftMessage, statusOf, type Draft } from "./drafts";
 import { selectedWebhookServerId, getWebhook, webhookByDiscordId, selectWebhook } from "./webhooks";
 import { settings } from "./settings";
@@ -49,6 +49,7 @@ export function saveDraft(): boolean {
 export function startNewMessage() {
   const { username, avatar_url } = message.value;
   replaceMessage({ ...emptyMessage(), username, avatar_url }, null);
+  markUntouched();
   toast("info", "New message", "Started a blank message.");
 }
 

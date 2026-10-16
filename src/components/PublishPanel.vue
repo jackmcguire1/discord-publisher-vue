@@ -3,7 +3,7 @@ import { ref, computed } from "vue";
 import { settings, webhookInfo } from "../stores/settings";
 import { savedWebhooks, getWebhook, selectWebhook, webhookByDiscordId, selectedWebhookServerId } from "../stores/webhooks";
 import { servers, getServer, guildIdFor } from "../stores/servers";
-import { message, isValid, errors, currentDraftId, markClean } from "../stores/message";
+import { message, isValid, errors, showErrors, currentDraftId, markClean } from "../stores/message";
 import { getDraft, createDraft, updateDraftMessage, setDraftServer, markPublished, markUpdated, markDeleted } from "../stores/drafts";
 import { sendMessage, editMessage, deleteMessage, messageLink, type DiscordApiError } from "../discord/webhook";
 import { toast } from "../stores/toasts";
@@ -179,7 +179,7 @@ async function remove() {
         </div>
       </Field>
 
-      <div v-if="!isValid" class="banner banner-error">
+      <div v-if="!isValid && showErrors" class="banner banner-error">
         <span>⚠</span>
         <span>Fix {{ errorCount }} validation {{ errorCount === 1 ? "issue" : "issues" }} before publishing.</span>
       </div>
@@ -189,7 +189,7 @@ async function remove() {
           <button
             class="btn btn-success"
             :disabled="!webhookInfo || !isValid || !!busy || !canPublish"
-            :title="canPublish ? '' : 'You don\'t have permission to publish in this organization'"
+            :title="!canPublish ? 'You don\'t have permission to publish in this organization' : !isValid && !showErrors ? 'Add some content or an embed first' : ''"
             @click="publish"
           >
             {{ busy === "send" ? "Publishing…" : published || deletedInfo ? "Publish as new" : "Publish" }}
