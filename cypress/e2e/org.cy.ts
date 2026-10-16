@@ -48,6 +48,14 @@ describe("sign-in and organizations", () => {
     cy.accountMenu("Members");
     cy.get(".member-item").should("have.length", 2);
     cy.get(".invite-email").should("not.exist");
+
+    // Members can leave (Cypress accepts the confirm), landing back on the welcome screen cleanly.
+    cy.contains(".settings-tab", "Organizations").click();
+    cy.get(".delete-org").should("not.exist");
+    cy.get(".leave-org").click();
+    cy.toast("Left Test Org");
+    cy.contains("h2", "Create an organization").should("be.visible");
+    cy.get(".toast-error").should("not.exist");
   });
 
   it("imports webhooks and drafts saved in this browser before sign-in", () => {

@@ -198,3 +198,44 @@ describe("membership management", () => {
     await assertFails(updateDoc(doc(as("admin"), "orgs", ORG), { ownerUid: "admin" }));
   });
 });
+
+describe("deleting an org", () => {
+  async function seedContent() {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, "orgs", ORG, "drafts", "d1"), { name: "D", message: {} });
+      await setDoc(doc(db, "orgs", ORG, "servers", "s1"), { name: "S", guildId: "" });
+    });
+  }
+
+  it("an admin flags the org, clears it and deletes it, removing their own membership last", async () => {
+    await seedContent();
+    const db = as("admin");
+    await assertFails(deleteDoc(doc(db, "orgs", ORG))); // not flagged yet
+    await assertSucceeds(updateDoc(doc(db, "orgs", ORG), { deleting: true }));
+    for (const [col, id] of [["drafts", "d1"], ["servers", "s1"], ["webhooks", "w1"], ["invites", people.invitee.email]]) {
+      await assertSucceeds(deleteDoc(doc(db, "orgs", ORG, col, id)));
+    }
+    await assertSucceeds(deleteDoc(doc(db, "orgs", ORG, "members", "owner")));
+    await assertSucceeds(deleteDoc(doc(db, "orgs", ORG, "members", "member")));
+    await assertSucceeds(deleteDoc(doc(db, "orgs", ORG)));
+    await assertSucceeds(deleteDoc(doc(db, "orgs", ORG, "members", "admin")));
+  });
+
+  it("members cannot flag, delete or remove the owner during deletion", async () => {
+    await assertFails(updateDoc(doc(as("member"), "orgs", ORG), { deleting: true }));
+    await env.withSecurityRulesDisabled((ctx) => updateDoc(doc(ctx.firestore(), "orgs", ORG), { deleting: true }));
+    await assertFails(deleteDoc(doc(as("member"), "orgs", ORG)));
+    await assertFails(deleteDoc(doc(as("member"), "orgs", ORG, "members", "owner")));
+    await assertFails(deleteDoc(doc(as("outsider"), "orgs", ORG)));
+  });
+
+  it("the owner's membership stays protected unless the org is being deleted", async () => {
+    await assertFails(deleteDoc(doc(as("admin"), "orgs", ORG, "members", "owner")));
+  });
+
+  it("the deleting flag can't be smuggled in with a rename", async () => {
+    await assertFails(updateDoc(doc(as("admin"), "orgs", ORG), { name: "X", deleting: true }));
+    await assertFails(updateDoc(doc(as("admin"), "orgs", ORG), { deleting: false }));
+  });
+});

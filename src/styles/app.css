@@ -377,3 +377,9 @@ select.nav-org option { background: var(--bg-1); color: var(--text); }
 
 .settings .card-body { border-top: none; padding: 20px; }
 .shell .gate { min-height: 0; flex: 1; }
+
+.danger-zone {
+  border: 1px solid rgba(218, 55, 60, .5); border-radius: var(--radius);
+  padding: 14px;
+}
+.danger-zone h2 { color: #f38688; }

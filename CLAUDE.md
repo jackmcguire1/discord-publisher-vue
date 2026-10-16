@@ -41,6 +41,7 @@ CI (`.github/workflows/ci.yml`) runs typecheck, build, the rules tests and the C
 ## Conventions
 
 - Roles: `owner` | `admin` | `member`. Admins manage webhooks, servers, invites and roles; every member reads everything and writes authors and drafts. Hide admin-only UI behind `canManage` (true for guests, who own their local data), but the rules are the real enforcement.
+- Deleting an org (`deleteOrg` in `org.ts`) must follow the order the rules allow: set `deleting: true`, delete every subcollection doc including other members, delete the org doc, then your own membership. Leaving and deleting go through `departOrg` in `session.ts`, which moves the app off the org before the membership disappears so its listeners don't hit permission errors.
 - Membership listeners ignore docs with pending writes: attaching org listeners before the membership commits gets them permanently denied.
 - The Firebase web config in `.env` is public by design; never commit service-account keys.
 - Keep dependencies minimal. Prefer a few lines of code over a new package.

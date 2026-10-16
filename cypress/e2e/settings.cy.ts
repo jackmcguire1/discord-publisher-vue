@@ -38,7 +38,7 @@ describe("navigation and settings", () => {
 
     cy.accountMenu("Account");
     cy.get(".account-email").should("contain.text", "@");
-    cy.get(".account-org").should("have.length", 1).and("contain.text", "current");
+    cy.get(".settings").should("contain.text", "You belong to 1 organization");
 
     cy.reload();
     cy.get(".settings-title").should("have.text", "Account");

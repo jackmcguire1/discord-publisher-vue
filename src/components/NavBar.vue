@@ -76,7 +76,7 @@ async function logOut() {
             </div>
           </div>
           <template v-if="activeOrgId">
-            <button class="nav-menu-item" role="menuitem" @click="go('/settings/general')">Organization</button>
+            <button class="nav-menu-item" role="menuitem" @click="go('/settings/general')">Organizations</button>
             <button class="nav-menu-item" role="menuitem" @click="go('/settings/members')">Members</button>
             <button class="nav-menu-item" role="menuitem" @click="go('/settings/webhooks')">Webhooks and servers</button>
             <button class="nav-menu-item" role="menuitem" @click="go('/settings/authors')">Authors</button>

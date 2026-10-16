@@ -12,7 +12,7 @@ import AccountPanel from "./AccountPanel.vue";
 // servers and authors to configure.
 
 const ALL: { id: SettingsTab; label: string; title: string; org: boolean }[] = [
-  { id: "general", label: "Organization", title: "Organization", org: true },
+  { id: "general", label: "Organizations", title: "Organizations", org: true },
   { id: "members", label: "Members", title: "Members and invites", org: true },
   { id: "webhooks", label: "Webhooks and servers", title: "Webhooks and servers", org: false },
   { id: "authors", label: "Authors", title: "Authors", org: false },

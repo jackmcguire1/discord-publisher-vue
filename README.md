@@ -147,12 +147,12 @@ Load the draft (or just stay on it), make your changes, and click **Update publi
 
 ## Organizations and roles
 
-Open **Settings** in the navigation bar, or pick a section from the avatar menu, to rename the organization, see members, invite people, change roles, create another organization or leave this one. **Account** lists your organizations and invitations. With more than one organization, switch between them from the selector next to your avatar.
+**Settings → Organizations** lists every organization you belong to and any invitations waiting for you. Switch between them there or from the selector next to your avatar, create a new one (you're switched into it), rename the current one, leave it, or, as an admin, delete it. Deleting removes the organization and all its webhooks, servers, authors, drafts, members and invites for everyone; you confirm by typing its name. Messages already posted on Discord are not touched. **Settings → Members** handles members, roles and invites.
 
 | Role   | Can do                                                                                     |
 | ------ | ------------------------------------------------------------------------------------------ |
-| Owner  | Everything an admin can. Created the organization; cannot be removed or demoted.          |
-| Admin  | Add, edit and delete webhooks and servers. Invite and remove people, change member roles.  |
+| Owner  | Everything an admin can. Created the organization; cannot be removed, demoted or leave.   |
+| Admin  | Add, edit and delete webhooks and servers. Invite and remove people, change member roles. Delete the organization. |
 | Member | Use the shared webhooks to publish. Add and edit authors and drafts. Leave the organization. |
 
 Invites are addressed to an email. The person joins with the invited role when they next sign in with that address. Admins can revoke an invite that hasn't been accepted.

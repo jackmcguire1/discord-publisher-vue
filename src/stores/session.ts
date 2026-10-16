@@ -1,4 +1,4 @@
-import { ref, computed, watch } from "vue";
+import { ref, computed, watch, nextTick } from "vue";
 import {
   onAuthStateChanged,
   sendSignInLinkToEmail,
@@ -42,9 +42,12 @@ export const myInvites = ref<Invite[]>([]);
 const storedOrg = ref<string | null>(load<string | null>("org", null));
 watch(storedOrg, (v) => save("org", v));
 
+/** Orgs being left or deleted right now; treated as gone so their listeners detach first. */
+const departing = ref<string[]>([]);
+
 /** The org currently in use: the remembered one if still a member, else the first. */
 export const activeOrgId = computed<string | null>(() => {
-  const ids = memberships.value.map((m) => m.orgId);
+  const ids = memberships.value.map((m) => m.orgId).filter((id) => !departing.value.includes(id));
   if (storedOrg.value && ids.includes(storedOrg.value)) return storedOrg.value;
   return ids.sort((a, b) => (orgNames.value[a] ?? "").localeCompare(orgNames.value[b] ?? ""))[0] ?? null;
 });
@@ -63,6 +66,22 @@ export const signInOpen = ref(false);
 
 export function switchOrg(orgId: string) {
   storedOrg.value = orgId;
+}
+
+/**
+ * Run `removeMembership` for an org we are leaving or deleting, after moving
+ * off it, so listeners on it stop before access is lost (otherwise each one
+ * reports a permission error).
+ */
+export async function departOrg(orgId: string, removeMembership: () => Promise<unknown>) {
+  departing.value = [...departing.value, orgId];
+  await nextTick();
+  try {
+    await removeMembership();
+  } catch (e) {
+    departing.value = departing.value.filter((id) => id !== orgId);
+    throw e;
+  }
 }
 
 export function myEmail(): string {
@@ -116,6 +135,7 @@ function stopAll() {
   stopOrgDocs = {};
   memberships.value = [];
   membershipsReady.value = false;
+  departing.value = [];
   myInvites.value = [];
   orgNames.value = {};
 }

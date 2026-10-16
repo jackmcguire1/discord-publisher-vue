@@ -1,7 +1,7 @@
 import { ref, watch } from "vue";
-import { collection, deleteDoc, doc, onSnapshot, setDoc, updateDoc } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDocs, onSnapshot, setDoc, updateDoc, writeBatch, type DocumentReference } from "firebase/firestore";
 import { db } from "../firebase";
-import { activeOrgId, activeOrgName, user, type Invite, type Role } from "./session";
+import { activeOrgId, activeOrgName, user, departOrg, type Invite, type Role } from "./session";
 
 // Membership management for the active org: who is in it, who is invited,
 // and the admin actions on both.
@@ -79,5 +79,33 @@ export function removeMember(uid: string) {
 }
 
 export function leaveOrg() {
-  return removeMember(user.value!.uid);
+  const id = orgId();
+  return departOrg(id, () => deleteDoc(doc(db, "orgs", id, "members", user.value!.uid)));
+}
+
+/**
+ * Delete the active org and everything in it. Firestore doesn't cascade, so
+ * the rules expect this order: flag `deleting`, remove every subcollection doc
+ * (other members included), delete the org doc, then our own membership.
+ */
+export async function deleteOrg() {
+  const id = orgId();
+  const me = user.value!.uid;
+  const org = doc(db, "orgs", id);
+  await updateDoc(org, { deleting: true });
+
+  const refs: DocumentReference[] = [];
+  for (const name of ["drafts", "authors", "webhooks", "servers", "invites", "members"]) {
+    const snap = await getDocs(collection(org, name));
+    refs.push(...snap.docs.map((d) => d.ref).filter((r) => !(name === "members" && r.id === me)));
+  }
+  for (let i = 0; i < refs.length; i += 400) {
+    const batch = writeBatch(db);
+    refs.slice(i, i + 400).forEach((r) => batch.delete(r));
+    await batch.commit();
+  }
+  await departOrg(id, async () => {
+    await deleteDoc(org);
+    await deleteDoc(doc(org, "members", me));
+  });
 }

@@ -1,7 +1,7 @@
 rules_version = '2';
 
 // Data model
-//   orgs/{orgId}                    { name, ownerUid, createdAt }
+//   orgs/{orgId}                    { name, ownerUid, createdAt, deleting? }
 //   orgs/{orgId}/members/{uid}      { uid, email, role: owner|admin|member, joinedAt }
 //   orgs/{orgId}/invites/{email}    { email, role: admin|member, orgName, invitedBy, createdAt }
 //   orgs/{orgId}/servers/{id}       admins write, members read
@@ -11,6 +11,10 @@ rules_version = '2';
 //
 // Everything is scoped to an org. Users join by creating an org (becoming its
 // owner) or by accepting an invite addressed to their verified email.
+//
+// Deleting an org: Firestore doesn't cascade, so an admin first sets
+// `deleting: true`, removes the subcollections (other members included), then
+// deletes the org doc, then their own membership last.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -47,6 +51,10 @@ service cloud.firestore {
       return isMember(orgId) && role(orgId) in ['owner', 'admin'];
     }
 
+    function isDeleting(orgId) {
+      return exists(orgPath(orgId)) && get(orgPath(orgId)).data.get('deleting', false) == true;
+    }
+
     function onlyChanges(fields) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
     }
@@ -70,12 +78,13 @@ service cloud.firestore {
         && request.resource.data.ownerUid == request.auth.uid
         && shortString(request.resource.data.name, 100)
         && request.resource.data.name.size() > 0;
-      allow update: if isAdmin(orgId)
-        && onlyChanges(['name'])
-        && shortString(request.resource.data.name, 100)
-        && request.resource.data.name.size() > 0;
-      // Subcollections are not removed with the org doc, so deletion is left to the console for now.
-      allow delete: if false;
+      allow update: if isAdmin(orgId) && (
+        (onlyChanges(['name'])
+          && shortString(request.resource.data.name, 100)
+          && request.resource.data.name.size() > 0)
+        || (onlyChanges(['deleting']) && request.resource.data.deleting == true)
+      );
+      allow delete: if isAdmin(orgId) && resource.data.get('deleting', false) == true;
 
       match /members/{uid} {
         allow read: if isMember(orgId);
@@ -104,9 +113,12 @@ service cloud.firestore {
           && onlyChanges(['role'])
           && request.resource.data.role in ['admin', 'member'];
 
-        // Admins remove others; anyone but the owner can leave.
-        allow delete: if resource.data.role != 'owner'
-          && (uid == request.auth.uid || isAdmin(orgId));
+        // Admins remove others; anyone but the owner can leave. While an org is
+        // being deleted admins may remove anyone, and once the org doc is gone
+        // each user may remove their own leftover membership.
+        allow delete: if (resource.data.role != 'owner' && (uid == request.auth.uid || isAdmin(orgId)))
+          || (isAdmin(orgId) && isDeleting(orgId))
+          || (uid == request.auth.uid && !exists(orgPath(orgId)));
       }
 
       match /invites/{inviteEmail} {
