@@ -44,7 +44,7 @@ Cypress.Commands.add("resetEmulators", () => {
 Cypress.Commands.add("signIn", (email = USER_EMAIL) => {
   cy.visit("/");
   cy.get(".nav-signin").click();
-  cy.get('input[type="email"]').type(email, { delay: 0 });
+  cy.get('input[type="email"]').clear().type(email, { delay: 0 });
   cy.contains("button", "Email me a sign-in link").click();
   cy.get(".sign-in-sent").should("contain.text", email);
   cy.request(`${AUTH_EMULATOR}/oobCodes`).then(({ body }) => {

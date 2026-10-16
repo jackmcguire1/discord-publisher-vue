@@ -38,7 +38,7 @@ const decline = (i: Invite) => run(() => declineInvite(i), "Could not decline in
         <p class="muted small" style="margin: 0">Signed in as {{ user?.email }}</p>
 
         <section v-if="myInvites.length" class="stack" style="--gap: 8px">
-          <h2 style="margin: 0">Invitations</h2>
+          <h2 style="margin: 0">You've been invited</h2>
           <div class="draft-list">
             <div v-for="i in myInvites" :key="i.orgId" class="draft invite-item">
               <div class="grow">
@@ -53,6 +53,10 @@ const decline = (i: Invite) => run(() => declineInvite(i), "Could not decline in
           </div>
           <hr class="divider" />
         </section>
+        <div v-else class="banner banner-info no-invites">
+          No invitations for <strong>{{ user?.email }}</strong>. If someone invited you, check they used exactly this
+          address (including anything after a +), or ask them for the invite link.
+        </div>
 
         <form class="stack" @submit.prevent="create">
           <h2 style="margin: 0">Create an organization</h2>

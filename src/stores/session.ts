@@ -38,6 +38,8 @@ export const memberships = ref<Membership[]>([]);
 export const membershipsReady = ref(false);
 export const orgNames = ref<Record<string, string>>({});
 export const myInvites = ref<Invite[]>([]);
+/** False until the signed-in user's invitations have loaded at least once. */
+export const invitesReady = ref(false);
 
 const storedOrg = ref<string | null>(load<string | null>("org", null));
 watch(storedOrg, (v) => save("org", v));
@@ -92,6 +94,23 @@ export function myEmail(): string {
 
 const EMAIL_KEY = "signInEmail";
 
+/** Link that opens sign-in with the invited address filled in. Nothing is emailed. */
+export function inviteLink(email: string): string {
+  const url = new URL(import.meta.env.BASE_URL, window.location.origin);
+  url.searchParams.set("invite", email);
+  return url.toString();
+}
+
+/** Email from an invite link (`?invite=`), removed from the address bar once read. */
+export function takeInviteEmail(): string | null {
+  const url = new URL(window.location.href);
+  const email = url.searchParams.get("invite");
+  if (!email) return null;
+  url.searchParams.delete("invite");
+  window.history.replaceState(null, "", url.toString());
+  return email.trim().toLowerCase();
+}
+
 export async function sendSignInLink(email: string) {
   const url = new URL(import.meta.env.BASE_URL, window.location.origin).toString();
   await sendSignInLinkToEmail(auth, email.trim(), { url, handleCodeInApp: true });
@@ -137,6 +156,7 @@ function stopAll() {
   membershipsReady.value = false;
   departing.value = [];
   myInvites.value = [];
+  invitesReady.value = false;
   orgNames.value = {};
 }
 
@@ -184,10 +204,20 @@ onAuthStateChanged(auth, (u) => {
 
   if (u.email && u.emailVerified) {
     stopUser.push(
-      onSnapshot(query(collectionGroup(db, "invites"), where("email", "==", u.email.toLowerCase())), (snap) => {
-        myInvites.value = snap.docs.map((d) => ({ ...(d.data() as Omit<Invite, "orgId">), orgId: d.ref.parent.parent!.id }));
-      }, (e) => console.error("invites listener", e))
+      onSnapshot(
+        query(collectionGroup(db, "invites"), where("email", "==", u.email.toLowerCase())),
+        (snap) => {
+          myInvites.value = snap.docs.map((d) => ({ ...(d.data() as Omit<Invite, "orgId">), orgId: d.ref.parent.parent!.id }));
+          invitesReady.value = true;
+        },
+        (e) => {
+          console.error("invites listener", e);
+          invitesReady.value = true;
+        }
+      )
     );
+  } else {
+    invitesReady.value = true;
   }
 });
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { user, activeOrgName, canManage } from "../stores/session";
+import { user, activeOrgName, canManage, inviteLink } from "../stores/session";
 import { members, pendingInvites, inviteMember, revokeInvite, setMemberRole, removeMember, type Member } from "../stores/org";
 import { toast } from "../stores/toasts";
 
@@ -24,8 +24,19 @@ async function sendInvite() {
     toast("info", "Already a member", email);
     return;
   }
-  if (await attempt(() => inviteMember(email, invite.value.role), "Invite created", "Could not invite")) {
+  if (await attempt(() => inviteMember(email, invite.value.role), null, "Could not invite")) {
     invite.value.email = "";
+    toast("success", "Invite created", `No email is sent. Copy the invite link and send it to ${email}, or ask them to sign in with exactly that address.`, 10000);
+  }
+}
+
+async function copyLink(email: string) {
+  const link = inviteLink(email);
+  try {
+    await navigator.clipboard.writeText(link);
+    toast("success", "Invite link copied", `Send it to ${email}.`);
+  } catch {
+    prompt("Copy this invite link and send it to them:", link);
   }
 }
 
@@ -75,14 +86,20 @@ function remove(m: Member) {
       <hr class="divider" />
       <section class="stack" style="--gap: 8px">
         <h2 style="margin: 0">Invites</h2>
-        <p class="muted small" style="margin: 0">Invited people join when they next sign in with that email address.</p>
+        <p class="muted small" style="margin: 0">
+          Invites aren't emailed. Invited people see the invitation when they sign in with exactly that address. The invite
+          link opens sign-in with their address filled in, so send them that.
+        </p>
         <div v-if="pendingInvites.length" class="draft-list">
           <div v-for="i in pendingInvites" :key="i.email" class="draft pending-invite">
             <div class="grow">
               <span class="draft-name">{{ i.email }}</span>
               <span class="tag" style="margin-left: 8px">{{ i.role }}</span>
             </div>
-            <button class="btn btn-sm btn-ghost" @click="attempt(() => revokeInvite(i.email), 'Invite revoked', 'Could not revoke')">Revoke</button>
+            <div class="row row-nowrap">
+              <button class="btn btn-sm copy-invite" @click="copyLink(i.email)">Copy invite link</button>
+              <button class="btn btn-sm btn-ghost" @click="attempt(() => revokeInvite(i.email), 'Invite revoked', 'Could not revoke')">Revoke</button>
+            </div>
           </div>
         </div>
         <form class="row row-nowrap" @submit.prevent="sendInvite">

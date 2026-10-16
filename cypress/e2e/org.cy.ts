@@ -29,7 +29,23 @@ describe("sign-in and organizations", () => {
     cy.get(".invite-email").type(TEAMMATE, { delay: 0 });
     cy.contains(".settings button", "Invite").click();
     cy.get(".pending-invite").should("contain.text", TEAMMATE);
+
+    // The invite link carries the address; opening it pre-fills sign-in.
+    cy.window().then((w) => cy.stub(w.navigator.clipboard, "writeText").as("copy").resolves());
+    cy.contains(".pending-invite", TEAMMATE).find(".copy-invite").click();
+    cy.toast("Invite link copied");
+    cy.get("@copy").should("have.been.calledWithMatch", /\?invite=teammate%40example\.com$/);
     cy.accountMenu("Sign out");
+    cy.visit("/?invite=teammate%40example.com");
+    cy.get(".invite-prefill").should("contain.text", TEAMMATE);
+    cy.get('input[type="email"]').should("have.value", TEAMMATE);
+    cy.location("search").should("eq", "");
+
+    // Signing in with a different address finds nothing, and says why.
+    cy.signIn("someone-else@example.com");
+    cy.get(".no-invites").should("contain.text", "someone-else@example.com");
+    cy.get(".invite-item").should("not.exist");
+    cy.contains("button", "Sign out").click();
 
     cy.signIn(TEAMMATE);
     cy.contains(".invite-item", "Test Org").contains("button", "Join").click();

@@ -155,7 +155,7 @@ Load the draft (or just stay on it), make your changes, and click **Update publi
 | Admin  | Add, edit and delete webhooks and servers. Invite and remove people, change member roles. Delete the organization. |
 | Member | Use the shared webhooks to publish. Add and edit authors and drafts. Leave the organization. |
 
-Invites are addressed to an email. The person joins with the invited role when they next sign in with that address. Admins can revoke an invite that hasn't been accepted.
+Invites are addressed to an email and are **not emailed**. The invitee sees the invitation when they sign in with exactly that address (a `+tag` counts: `you+a@gmail.com` and `you+b@gmail.com` are different), and joins with the invited role. Use **Copy invite link** next to a pending invite and send it to them yourself: it opens sign-in with their address filled in. Admins can revoke an invite that hasn't been accepted.
 
 These permissions are enforced by the Firestore security rules (`firebase/firestore.rules`), not just hidden in the UI.
 
@@ -236,7 +236,7 @@ The built site is static (Firebase is called from the browser), so it also works
 
 Production uses the Firebase project `discord-publisher-8a732`. Its web config is in `.env` and is committed on purpose: it identifies the project but grants no access, and it ends up in the built JavaScript anyway. Access is controlled by the security rules. Service-account keys or deploy tokens must never be committed.
 
-Only Authentication and Firestore are used, both on the free Spark plan. Firebase Storage and Cloud Functions are not used.
+Only Authentication and Firestore are used, both on the free Spark plan. Note the Spark plan's limit of **5 email-link sign-in emails per day** across the whole project. Firebase Storage and Cloud Functions are not used.
 
 One-time setup in the [Firebase console](https://console.firebase.google.com/project/discord-publisher-8a732):
 
@@ -347,6 +347,12 @@ Add the site's domain under Authentication → Settings → Authorized domains i
 
 **The sign-in link opens but asks for my email again**
 You opened it in a different browser from the one you requested it in. Enter the same email address and sign-in completes.
+
+**An invited person sees "Create an organization" instead of the invite**
+They signed in with a different address from the one invited; the welcome screen shows which one. Send them the invite link, or revoke and re-invite the address they used.
+
+**Sign-in emails stop arriving (`auth/quota-exceeded`)**
+On the free Spark plan Firebase sends at most 5 email-link sign-in emails per day for the whole project (25,000 on Blaze). Wait until the next day, or upgrade the project to Blaze.
 
 **"Missing or insufficient permissions" (`permission-denied`)**
 The Firestore rules in the console don't match `firebase/firestore.rules`; deploy them again. As a member, you also can't change webhooks or servers; ask an admin.

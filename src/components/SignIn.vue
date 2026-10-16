@@ -4,9 +4,9 @@ import Field from "./Field.vue";
 import { sendSignInLink, signInOpen } from "../stores/session";
 import { usingEmulators } from "../firebase";
 
-defineProps<{ error?: string | null }>();
+const props = defineProps<{ error?: string | null; prefill?: string | null }>();
 
-const email = ref("");
+const email = ref(props.prefill ?? "");
 const sentTo = ref("");
 const sending = ref(false);
 const failure = ref("");
@@ -47,6 +47,9 @@ async function send() {
         </template>
 
         <form v-else class="stack" @submit.prevent="send">
+          <div v-if="prefill" class="banner banner-info invite-prefill">
+            You've been invited to an organization. Sign in as <strong>{{ prefill }}</strong> to join it.
+          </div>
           <p class="muted small" style="margin: 0">
             Sign in with your email. We'll send you a link, no password needed. Signing in lets you create or join an
             organization and share webhooks, authors and drafts with it. Anything you saved as a guest can be imported.

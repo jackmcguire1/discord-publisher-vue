@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from "vue";
+import { ref, computed, watch, onMounted, onUnmounted } from "vue";
 import { message, currentDraftId, undo, redo } from "./stores/message";
 import { getDraft } from "./stores/drafts";
 import Toolbar from "./components/Toolbar.vue";
@@ -17,7 +17,19 @@ import SignIn from "./components/SignIn.vue";
 import OrgSetup from "./components/OrgSetup.vue";
 import NavBar from "./components/NavBar.vue";
 import SettingsPage from "./components/SettingsPage.vue";
-import { user, authReady, membershipsReady, activeOrgId, completeSignInFromLink, isGuest, signInOpen } from "./stores/session";
+import {
+  user,
+  authReady,
+  membershipsReady,
+  invitesReady,
+  activeOrgId,
+  completeSignInFromLink,
+  isGuest,
+  signInOpen,
+  takeInviteEmail,
+  myEmail,
+} from "./stores/session";
+import { toast } from "./stores/toasts";
 import { hasLegacyData } from "./stores/legacy";
 import { route, href } from "./router";
 
@@ -41,15 +53,32 @@ completeSignInFromLink().then((err) => {
   if (err) signInOpen.value = true;
 });
 
+// An invite link (?invite=email) opens sign-in with that address filled in, so
+// the invitee signs in with exactly the address the invite was made for.
+const invitedEmail = ref(takeInviteEmail());
+if (invitedEmail.value) {
+  const stop = watch(
+    authReady,
+    (ready) => {
+      if (!ready) return;
+      stop();
+      if (!user.value) signInOpen.value = true;
+      else if (myEmail() !== invitedEmail.value)
+        toast("info", `This invite is for ${invitedEmail.value}`, `You're signed in as ${myEmail()}. Sign out and sign in with the invited address to join.`, 12000);
+    },
+    { immediate: true }
+  );
+}
+
 onMounted(() => window.addEventListener("keydown", onKey));
 onUnmounted(() => window.removeEventListener("keydown", onKey));
 </script>
 
 <template>
-  <div v-if="!authReady || (user && !membershipsReady)" class="gate muted">Loading…</div>
+  <div v-if="!authReady || (user && (!membershipsReady || !invitesReady))" class="gate muted">Loading…</div>
   <div v-else class="shell">
     <NavBar />
-    <SignIn v-if="isGuest && signInOpen" :error="signInError" />
+    <SignIn v-if="isGuest && signInOpen" :error="signInError" :prefill="invitedEmail" />
     <OrgSetup v-else-if="user && !activeOrgId" />
     <SettingsPage v-else-if="route.page === 'settings'" />
     <div v-else class="app">
