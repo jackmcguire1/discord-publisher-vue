@@ -35,7 +35,7 @@ export interface Draft {
   serverId: string | null;
   published?: PublishInfo;
   deleted?: PublishInfo & { deletedAt: string; deletedBy?: string };
-  /** Number of the latest revision (see revisions.ts); absent until the first one. */
+  /** Number of the latest revision (see revisions.ts); 0 before the first, absent on messages from before versioning. */
   revision?: number;
 }
 
@@ -75,6 +75,10 @@ export function getDraft(id: string | null): Draft | undefined {
  */
 function revise(id: string, kind: RevisionKind, message: Message, note?: string): { revision: number } {
   const number = (getDraft(id)?.revision ?? 0) + 1;
+  return record(id, number, kind, message, note);
+}
+
+function record(id: string, number: number, kind: RevisionKind, message: Message, note?: string): { revision: number } {
   addRevision(id, { number, kind, message: clone(message), createdAt: new Date().toISOString(), createdBy: myEmail() || undefined, note });
   return { revision: number };
 }
@@ -96,6 +100,8 @@ export function createDraft(
     message: clone(message),
     serverId,
     ...(by && { createdBy: by, updatedBy: by }),
+    // 0 = has history, nothing recorded yet (vs. undefined: from before versioning, see ensureBaseline).
+    revision: 0,
   };
   store.set(draft);
   if (opts.revision !== false) store.update(draft.id, revise(draft.id, "saved", message, opts.note));
@@ -103,9 +109,22 @@ export function createDraft(
 }
 
 /** Save new content to a draft, as a new revision unless `revision: false`. */
+/**
+ * Messages from before versioning (or imported ones) have no revisions, so
+ * their current content isn't in the history. Before the first change, keep
+ * that content as v1 so the starting point is never lost.
+ */
+function ensureBaseline(id: string) {
+  const d = getDraft(id);
+  if (!d || d.revision !== undefined) return;
+  const base = d.published ? "published" : "saved";
+  store.update(id, record(id, 1, base, d.message, "Version from before history was kept"));
+}
+
 export function updateDraftMessage(id: string, message: Message, opts: { revision?: boolean } = {}): Draft | undefined {
   const d = getDraft(id);
   if (!d) return;
+  ensureBaseline(id);
   store.update(id, {
     message: clone(message),
     updatedAt: new Date().toISOString(),
@@ -134,6 +153,7 @@ export function clearDraftServer(serverId: string) {
 
 /** Record a fresh publish. Use a draft that hasn't been published before. */
 export function markPublished(id: string, ref: PublishedRef, message: Message, savedWebhookId: string | null) {
+  ensureBaseline(id);
   const now = new Date().toISOString();
   const by = myEmail() || undefined;
   store.update(id, {
@@ -150,6 +170,7 @@ export function markPublished(id: string, ref: PublishedRef, message: Message, s
 export function markUpdated(id: string, ref: PublishedRef, message: Message) {
   const d = getDraft(id);
   if (!d?.published) return;
+  ensureBaseline(id);
   const now = new Date().toISOString();
   const by = myEmail() || undefined;
   store.update(id, {

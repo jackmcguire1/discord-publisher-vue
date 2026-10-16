@@ -67,6 +67,7 @@ export async function listRevisions(draftId: string): Promise<Revision[]> {
 /** Delete one saved revision. Published/updated ones are kept as the record of what went to Discord. */
 export async function deleteRevision(draftId: string, rev: Revision) {
   if (rev.kind !== "saved") throw new Error("Published versions can't be deleted");
+  if (rev.number === 1) throw new Error("The first version is kept as the message's starting point");
   if (isGuest.value) {
     const all = load<GuestRevisions>(GUEST_KEY, {});
     all[draftId] = (all[draftId] ?? []).filter((r) => r.id !== rev.id);

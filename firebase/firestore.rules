@@ -256,8 +256,9 @@ service cloud.firestore {
 
         // Snapshots of the message. Anyone in the org records "saved" ones;
         // "published"/"updated" ones need canPublish. They are never edited.
-        // Any member may delete a "saved" one; the record of what went out to
-        // Discord only goes when its message is removed (same permission as the message).
+        // Any member may delete a "saved" one except v1, the message's starting
+        // point; v1 and the record of what went out to Discord only go when
+        // the message is removed (same permission as the message).
         match /revisions/{revId} {
           function draftDoc() {
             return /databases/$(database)/documents/orgs/$(orgId)/drafts/$(id);
@@ -274,7 +275,7 @@ service cloud.firestore {
               || (request.resource.data.kind in ['published', 'updated'] && canPublish(orgId)));
           allow update: if false;
           allow delete: if isMember(orgId) && (
-            resource.data.kind == 'saved'
+            (resource.data.kind == 'saved' && resource.data.number != 1)
             || canDelete(orgId)
             || !exists(draftDoc())
             || (get(draftDoc()).data.get('published', null) == null && get(draftDoc()).data.get('deleted', null) == null)

@@ -107,12 +107,17 @@ function restore(r: Revision) {
             </button>
             <button class="btn btn-sm btn-primary revision-restore" @click="restore(r)">Restore</button>
             <button
-              v-if="r.kind === 'saved'"
+              v-if="r.kind === 'saved' && r.number !== 1"
               class="btn btn-sm btn-danger revision-delete"
               title="Delete this version"
               @click="remove(r)"
             >✕</button>
-            <span v-else class="btn btn-sm btn-ghost revision-locked" title="Versions that went out to Discord are kept as a record" aria-disabled="true">🔒</span>
+            <span
+              v-else
+              class="btn btn-sm btn-ghost revision-locked"
+              :title="r.number === 1 ? 'The first version is kept as the message\'s starting point' : 'Versions that went out to Discord are kept as a record'"
+              aria-disabled="true"
+            >🔒</span>
           </div>
         </div>
       </div>

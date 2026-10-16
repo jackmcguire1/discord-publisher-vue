@@ -52,7 +52,9 @@ describe("message versions", () => {
     cy.get(".revision-item").should("have.length", 3);
     revisionDocs().should("have.length", 3);
 
-    // Saved versions can be deleted (Cypress accepts the confirm).
+    // Saved versions can be deleted (Cypress accepts the confirm), except v1, the starting point.
+    cy.get('.revision-item[data-revision="1"] .revision-delete').should("not.exist");
+    cy.get('.revision-item[data-revision="1"] .revision-locked').should("exist");
     cy.get('.revision-item[data-revision="2"] .revision-delete').click();
     cy.toast("Deleted v2");
     cy.get(".revision-item").should("have.length", 2);
@@ -112,5 +114,29 @@ describe("message versions", () => {
     cy.contains(".nav-link", "Messages").click();
     cy.contains(".draft-item", "Guest notes").contains("button", "History").click();
     cy.get(".revision-item").should("have.length", 2);
+  });
+
+  it("an imported message keeps its original content as v1 when first changed", () => {
+    cy.visitClean();
+    const file = {
+      format: "discord-publisher-drafts",
+      version: 1,
+      exportedAt: "2026-01-01T00:00:00.000Z",
+      drafts: [{ id: "x", name: "Old one", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", message: { content: "Original text", tts: false, embeds: [] } }],
+    };
+    cy.openModal("Messages");
+    cy.get('.modal input[type="file"]').selectFile(
+      { contents: Cypress.Buffer.from(JSON.stringify(file)), fileName: "drafts.json", mimeType: "application/json" },
+      { force: true }
+    );
+    cy.contains(".draft-item", "Old one").contains("button", "Load").click();
+    cy.get(".message-panel .editor-history").should("be.disabled");
+    content().clear().type("New text", { delay: 0 });
+    cy.contains("button", "Update draft").click();
+    cy.get(".message-panel .revision-tag").should("have.text", "v2");
+    cy.get(".editor-history").click();
+    cy.get('.revision-item[data-revision="1"]').should("contain.text", "Original text").and("contain.text", "before history");
+    cy.get('.revision-item[data-revision="2"]').should("contain.text", "New text");
+    revisionDocs().should("have.length", 2);
   });
 });
