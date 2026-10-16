@@ -6,11 +6,13 @@ describe("sign-in and organizations", () => {
   it("signs in, creates an org and stays signed in across reloads", () => {
     cy.visitClean();
     cy.get(".org-current").should("have.text", "Test Org");
-    cy.get(".org-bar .tag").should("have.text", "owner");
-    cy.get(".user-email").should("have.text", USER_EMAIL);
+    cy.get(".avatar-btn").click();
+    cy.get(".nav-menu .user-email").should("have.text", USER_EMAIL);
+    cy.get(".nav-menu .nav-role").should("have.text", "owner");
+    cy.get("body").type("{esc}");
     cy.reload();
     cy.get(".org-current").should("have.text", "Test Org");
-    cy.contains("button", "Sign out").click();
+    cy.accountMenu("Sign out");
     cy.get(".guest-bar").should("be.visible");
   });
 
@@ -23,17 +25,18 @@ describe("sign-in and organizations", () => {
     cy.toast("Webhook saved");
     cy.get("body").type("{esc}");
 
-    cy.contains("button", "Organization").click();
+    cy.accountMenu("Members");
     cy.get(".invite-email").type(TEAMMATE, { delay: 0 });
-    cy.contains(".modal button", "Invite").click();
+    cy.contains(".settings button", "Invite").click();
     cy.get(".pending-invite").should("contain.text", TEAMMATE);
-    cy.get("body").type("{esc}");
-    cy.contains("button", "Sign out").click();
+    cy.accountMenu("Sign out");
 
     cy.signIn(TEAMMATE);
     cy.contains(".invite-item", "Test Org").contains("button", "Join").click();
     cy.get(".discord-messages").should("exist");
-    cy.get(".org-bar .tag").should("have.text", "member");
+    cy.get(".avatar-btn").click();
+    cy.get(".nav-menu .nav-role").should("have.text", "member");
+    cy.get("body").type("{esc}");
 
     // Members use shared webhooks but cannot change them.
     cy.get("select.webhook-select").find("option").should("contain.text", "Announcements");
@@ -42,7 +45,7 @@ describe("sign-in and organizations", () => {
     cy.get(".admin-only-note").should("be.visible");
     cy.get("body").type("{esc}");
 
-    cy.contains("button", "Organization").click();
+    cy.accountMenu("Members");
     cy.get(".member-item").should("have.length", 2);
     cy.get(".invite-email").should("not.exist");
   });
@@ -71,11 +74,12 @@ describe("sign-in and organizations", () => {
     });
     cy.signIn();
     cy.createOrg();
-    cy.get(".legacy-banner").contains("button", "Import…").click();
-    cy.contains(".modal button", "Import into Test Org").click();
+    cy.get(".legacy-banner").contains("Import…").click();
+    cy.contains(".settings button", "Import into Test Org").click();
     cy.toast("Imported 2 items");
+    cy.get(".legacy-import").should("not.exist");
+    cy.contains(".nav-link", "Editor").click();
     cy.get(".legacy-banner").should("not.exist");
-    cy.get("body").type("{esc}");
     cy.get("select.webhook-select").find("option").should("contain.text", "Old hook");
     cy.openModal("Drafts");
     cy.get(".draft-name").should("have.text", "Old draft");

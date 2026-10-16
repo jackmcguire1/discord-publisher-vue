@@ -26,6 +26,8 @@ declare global {
       stubDiscord(): Chainable<void>;
       /** Paste the test webhook URL into the publish panel. */
       setWebhook(url?: string): Chainable<void>;
+      /** Open the navbar account menu and click an item by label. */
+      accountMenu(item: string): Chainable<void>;
       /** Open a toolbar modal by its button label. */
       openModal(label: "JSON" | "cURL" | "Drafts"): Chainable<void>;
       /** Assert a toast with the given title is showing. */
@@ -41,7 +43,7 @@ Cypress.Commands.add("resetEmulators", () => {
 
 Cypress.Commands.add("signIn", (email = USER_EMAIL) => {
   cy.visit("/");
-  cy.contains(".guest-bar button", "Sign in").click();
+  cy.get(".nav-signin").click();
   cy.get('input[type="email"]').type(email, { delay: 0 });
   cy.contains("button", "Email me a sign-in link").click();
   cy.get(".sign-in-sent").should("contain.text", email);
@@ -86,6 +88,11 @@ Cypress.Commands.add("stubDiscord", () => {
 
 Cypress.Commands.add("setWebhook", (url = WEBHOOK) => {
   cy.get('input[placeholder^="https://discord.com/api/webhooks"]').clear().type(url, { delay: 0 });
+});
+
+Cypress.Commands.add("accountMenu", (item) => {
+  cy.get(".avatar-btn").click();
+  cy.contains(".nav-menu-item", item).click();
 });
 
 Cypress.Commands.add("openModal", (label) => {

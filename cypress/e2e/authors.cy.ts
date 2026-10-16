@@ -118,7 +118,7 @@ describe("authors", () => {
     cy.get("body").type("{esc}");
     cy.get(".author-menu").should("not.exist");
     cy.get(".author-toggle").first().click();
-    cy.get("h1").click();
+    cy.contains("h2", "Preview").click();
     cy.get(".author-menu").should("not.exist");
     cy.get(".author-toggle").first().click();
     cy.contains(".author-menu button", "Manage authors…").click();

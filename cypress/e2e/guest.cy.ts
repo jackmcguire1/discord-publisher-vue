@@ -9,7 +9,7 @@ describe("guest mode", () => {
   it("uses the editor without signing in", () => {
     cy.get(".guest-bar").should("contain.text", "Guest");
     cy.get(".org-current").should("not.exist");
-    cy.contains("button", "Organization").should("not.exist");
+    cy.get(".avatar-btn").should("not.exist");
   });
 
   it("saves webhooks, authors and drafts in this browser and publishes", () => {
@@ -35,7 +35,7 @@ describe("guest mode", () => {
   });
 
   it("opens and closes the sign-in screen", () => {
-    cy.contains(".guest-bar button", "Sign in").click();
+    cy.get(".nav-signin").click();
     cy.contains("button", "Email me a sign-in link").should("be.visible");
     cy.contains("button", "Continue as guest").click();
     cy.get(".discord-messages").should("exist");
@@ -50,14 +50,14 @@ describe("guest mode", () => {
 
     cy.signIn();
     cy.createOrg();
-    cy.get(".legacy-banner").contains("button", "Import…").click();
-    cy.contains(".modal button", "Import into Test Org").click();
+    cy.get(".legacy-banner").contains("Import…").click();
+    cy.contains(".settings button", "Import into Test Org").click();
     cy.toast("Imported 1 item");
-    cy.get("body").type("{esc}");
+    cy.contains(".nav-link", "Editor").click();
     cy.get("select.webhook-select").find("option:selected").should("have.text", "Guest hook");
 
     // Signing out leaves a clean guest workspace; the data now lives in the org.
-    cy.contains("button", "Sign out").click();
+    cy.accountMenu("Sign out");
     cy.get(".guest-bar").should("be.visible");
     cy.get("select.webhook-select").find("option").should("have.length", 1);
   });

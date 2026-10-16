@@ -33,6 +33,7 @@ Live site: **https://jackmcguire1.github.io/discord-publisher-vue/**
 - **Passwordless sign-in**: enter your email, click the link you receive.
 - **Organizations** hold everything shared: webhooks, servers, authors and drafts. Belong to several and switch between them from the header.
 - **Invite by email**: admins invite an address as member or admin; that person joins the next time they sign in.
+- **Navigation bar** with an account menu, and a **Settings** page for the organization, members and invites, webhooks and servers, authors and your account. Guests get the webhooks and authors sections.
 - **Roles**: owners and admins manage webhooks, servers and membership; members use them and work on authors and drafts.
 - **Bring your guest data**: after signing in, webhooks, authors, servers and drafts saved as a guest can be imported into an organization in one click.
 
@@ -146,7 +147,7 @@ Load the draft (or just stay on it), make your changes, and click **Update publi
 
 ## Organizations and roles
 
-Open **Organization** in the header to rename it, see members, invite people, change roles, create another organization or leave this one.
+Open **Settings** in the navigation bar, or pick a section from the avatar menu, to rename the organization, see members, invite people, change roles, create another organization or leave this one. **Account** lists your organizations and invitations. With more than one organization, switch between them from the selector next to your avatar.
 
 | Role   | Can do                                                                                     |
 | ------ | ------------------------------------------------------------------------------------------ |
@@ -273,7 +274,7 @@ Signed in, a few things still stay in this browser's `localStorage`, under the `
 | `settings` | Active webhook URL, which saved webhook it came from, thread ID   |
 | `org`      | Which organization you last worked in                             |
 
-Your sign-in session is also kept in `localStorage` by Firebase. Guest data lives under `drafts`, `webhooks`, `servers` and `authors`; after signing in, the app offers to import it into your organization (Organization dialog) and removes it from the browser afterwards.
+Your sign-in session is also kept in `localStorage` by Firebase. Guest data lives under `drafts`, `webhooks`, `servers` and `authors`; after signing in, the app offers to import it into your organization (Settings → Organization) and removes it from the browser afterwards.
 
 Messages go only to the Discord webhook you choose. Firebase receives your email address and your organization's data.
 
@@ -316,7 +317,8 @@ src/
 ├─ components/
 │  ├─ MessageEditor.vue, EmbedEditor.vue, EmbedFieldEditor.vue
 │  ├─ MessagePreview.vue
-│  ├─ SignIn.vue, OrgSetup.vue, OrgModal.vue
+│  ├─ NavBar.vue, SettingsPage.vue, SignIn.vue, OrgSetup.vue
+│  ├─ OrgGeneralPanel.vue, MembersPanel.vue, AccountPanel.vue, WebhooksPanel.vue, AuthorsPanel.vue
 │  ├─ PublishPanel.vue, Toolbar.vue
 │  ├─ JsonModal.vue, CurlModal.vue, DraftsModal.vue, WebhooksModal.vue, AuthorsModal.vue
 │  ├─ AuthorPicker.vue
@@ -324,6 +326,7 @@ src/
 ├─ styles/
 │  ├─ app.css          Application styling (CSS variables, dark theme)
 │  └─ preview.css      Discord message styling for the preview
+├─ router.ts          Hash routes for the editor and settings pages
 ├─ App.vue
 └─ main.ts
 firebase/
@@ -331,7 +334,7 @@ firebase/
 └─ firestore.indexes.json
 tests/rules/             Security rules tests
 cypress/
-├─ e2e/              guest, org, editor, publish, webhooks, servers, authors, export-import and drafts specs
+├─ e2e/              guest, org, settings, editor, publish, webhooks, servers, authors, export-import and drafts specs
 └─ support/e2e.ts    custom commands (visitClean, visitGuest, signIn, createOrg, stubDiscord, …)
 ```
 
