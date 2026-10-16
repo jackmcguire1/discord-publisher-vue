@@ -71,7 +71,7 @@ Live site: **https://jackmcguire1.github.io/discord-publisher-vue/**
 
 ### Messages: drafts and sent history
 
-- **Messages** in the toolbar lists drafts, published messages and messages deleted from Discord, with filters for each.
+- **Messages** in the navigation bar (or the toolbar, as a quick dialog) lists drafts, published messages and messages deleted from Discord, with filters for each.
 - Every publish is recorded with who published it, when, through which webhook, and who last updated it. Deleting from Discord keeps the message as history (marked deleted) instead of losing it; publishing it again creates a new message.
 - **Load** on a published message selects the webhook it went through and pulls its current content from Discord, ready to update or delete.
 - Save, rename, duplicate, delete, export and import drafts.
@@ -320,16 +320,17 @@ src/
 ├─ components/
 │  ├─ MessageEditor.vue, EmbedEditor.vue, EmbedFieldEditor.vue
 │  ├─ MessagePreview.vue
-│  ├─ NavBar.vue, SettingsPage.vue, SignIn.vue, OrgSetup.vue
+│  ├─ NavBar.vue, MessagesPage.vue, SettingsPage.vue, SignIn.vue, OrgSetup.vue
+│  ├─ MessagesPanel.vue, MessagesModal.vue
 │  ├─ OrgGeneralPanel.vue, MembersPanel.vue, AccountPanel.vue, WebhooksPanel.vue, AuthorsPanel.vue
 │  ├─ PublishPanel.vue, Toolbar.vue
-│  ├─ JsonModal.vue, CurlModal.vue, DraftsModal.vue, WebhooksModal.vue, AuthorsModal.vue
+│  ├─ JsonModal.vue, CurlModal.vue, WebhooksModal.vue, AuthorsModal.vue
 │  ├─ AuthorPicker.vue
 │  └─ Field.vue, Modal.vue, Toasts.vue
 ├─ styles/
 │  ├─ app.css          Application styling (CSS variables, dark theme)
 │  └─ preview.css      Discord message styling for the preview
-├─ router.ts          Hash routes for the editor and settings pages
+├─ router.ts          Hash routes for the editor, messages and settings pages
 ├─ App.vue
 └─ main.ts
 firebase/

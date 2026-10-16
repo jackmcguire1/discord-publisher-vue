@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
-import Modal from "./Modal.vue";
 import {
   drafts,
   deleteDraft,
@@ -23,7 +22,7 @@ import { servers, getServer, addServer, findServerByName, guildIdFor, type Serve
 import { downloadText, readFileAsText, slugify, formatDateTime } from "../util";
 import { toast } from "../stores/toasts";
 
-const emit = defineEmits<{ close: [] }>();
+const emit = defineEmits<{ loaded: [] }>();
 
 type Filter = "all" | MessageStatus;
 const filter = ref<Filter>("all");
@@ -69,7 +68,7 @@ async function load(d: Draft) {
   if (!info) {
     replaceMessage(next, d.id);
     toast("info", statusOf(d) === "deleted" ? "Deleted message loaded" : "Draft loaded", d.name);
-    emit("close");
+    emit("loaded");
     return;
   }
 
@@ -79,7 +78,7 @@ async function load(d: Draft) {
   if (webhookInfo.value?.id !== info.webhookId) {
     replaceMessage(next, d.id);
     toast("info", "Loaded the saved copy", "The webhook that published it isn't available here, so it can't be refreshed from Discord or edited.");
-    emit("close");
+    emit("loaded");
     return;
   }
 
@@ -98,7 +97,7 @@ async function load(d: Draft) {
   } finally {
     loading.value = null;
   }
-  emit("close");
+  emit("loaded");
 }
 
 function isHistory(d: Draft) {
@@ -167,7 +166,7 @@ async function importFiles(e: Event) {
 </script>
 
 <template>
-  <Modal title="Messages" @close="emit('close')">
+  <div class="stack messages-panel" style="--gap: 12px">
     <div v-if="!drafts.length" class="empty">
       No messages yet. Use “Save draft” in the toolbar, or publish a message and it will be tracked here automatically.
     </div>
@@ -232,12 +231,12 @@ async function importFiles(e: Event) {
       </div>
     </div>
 
-    <template #footer>
+    <div class="row messages-actions">
       <button class="btn btn-ghost" @click="fileInput?.click()">
         Import…
         <input ref="fileInput" type="file" accept=".json,application/json" multiple hidden @change="importFiles" />
       </button>
       <button class="btn" :disabled="!drafts.length" @click="exportAll">Export all</button>
-    </template>
-  </Modal>
+    </div>
+  </div>
 </template>

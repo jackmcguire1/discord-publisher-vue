@@ -8,7 +8,7 @@ import MessageEditor from "./components/MessageEditor.vue";
 import MessagePreview from "./components/MessagePreview.vue";
 import JsonModal from "./components/JsonModal.vue";
 import CurlModal from "./components/CurlModal.vue";
-import DraftsModal from "./components/DraftsModal.vue";
+import MessagesModal from "./components/MessagesModal.vue";
 import WebhooksModal from "./components/WebhooksModal.vue";
 import AuthorsModal from "./components/AuthorsModal.vue";
 import { authorsDialog } from "./stores/authors";
@@ -17,6 +17,7 @@ import SignIn from "./components/SignIn.vue";
 import OrgSetup from "./components/OrgSetup.vue";
 import NavBar from "./components/NavBar.vue";
 import SettingsPage from "./components/SettingsPage.vue";
+import MessagesPage from "./components/MessagesPage.vue";
 import {
   user,
   authReady,
@@ -82,6 +83,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKey));
     <SignIn v-if="isGuest && signInOpen" :error="signInError" :prefill="invitedEmail" />
     <OrgSetup v-else-if="user && !activeOrgId" />
     <SettingsPage v-else-if="route.page === 'settings'" />
+    <MessagesPage v-else-if="route.page === 'messages'" />
     <div v-else class="app">
       <div class="pane pane-editor">
         <div class="stack">
@@ -109,7 +111,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKey));
 
       <JsonModal v-if="view === 'json'" @close="view = null" />
       <CurlModal v-if="view === 'curl'" @close="view = null" />
-      <DraftsModal v-if="view === 'drafts'" @close="view = null" />
+      <MessagesModal v-if="view === 'drafts'" @close="view = null" />
       <WebhooksModal v-if="view === 'webhooks'" @close="view = null" />
       <AuthorsModal v-if="authorsDialog" :key="JSON.stringify(authorsDialog.prefill)" />
     </div>

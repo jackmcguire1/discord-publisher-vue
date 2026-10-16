@@ -352,10 +352,16 @@ select.nav-org option { background: var(--bg-1); color: var(--text); }
 .nav-menu-item:hover { background: var(--blurple); color: #fff; }
 .nav-menu-divider { height: 1px; background: var(--border); margin: 4px 0; }
 
+.nav-links, .nav-account, .nav-signin { flex: none; }
+
 @media (max-width: 640px) {
-  .navbar { padding: 0 12px; }
+  .navbar { padding: 0 12px; gap: 6px; }
+  .nav-brand { margin-right: 4px; }
   .nav-brand span { display: none; }
-  .nav-org { max-width: 120px; }
+  .nav-link { padding: 7px 8px; }
+  .nav-org { max-width: 90px; }
+  /* The Sign in button already says you're a guest. */
+  .nav-guest { display: none; }
 }
 
 /* ---- settings page ------------------------------------------------------ */
@@ -393,3 +399,10 @@ select.nav-org option { background: var(--bg-1); color: var(--text); }
   padding: 14px;
 }
 .danger-zone h2 { color: #f38688; }
+
+/* ---- full-width pages (messages) ---------------------------------------- */
+
+.page { flex: 1; min-height: 0; overflow-y: auto; padding: 24px 16px; }
+.page-inner { max-width: 1000px; margin: 0 auto; }
+.page-inner > * + * { margin-top: 16px; }
+.page .card-body { border-top: none; padding: 20px; }

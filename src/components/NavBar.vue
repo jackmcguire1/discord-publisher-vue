@@ -46,6 +46,7 @@ async function logOut() {
     </a>
     <nav class="nav-links">
       <a :href="href('/')" class="nav-link" :class="{ active: route.page === 'editor' }">Editor</a>
+      <a :href="href('/messages')" class="nav-link nav-messages" :class="{ active: route.page === 'messages' }">Messages</a>
       <a :href="href('/settings/webhooks')" class="nav-link nav-settings" :class="{ active: route.page === 'settings' }">Settings</a>
     </nav>
 

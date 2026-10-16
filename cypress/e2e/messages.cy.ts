@@ -42,6 +42,20 @@ describe("messages: published history", () => {
     cy.get(".banner-success").should("contain.text", "updated").and("contain.text", `by ${USER_EMAIL}`);
   });
 
+  it("has its own page in the navbar, and loading from it opens the editor", () => {
+    cy.contains(".nav-link", "Messages").click();
+    cy.location("hash").should("eq", "#/messages");
+    cy.get(".nav-messages").should("have.class", "active");
+    cy.get(".messages-panel .draft-item").should("have.length", 1).and("contain.text", "published");
+    cy.reload();
+    cy.get(".messages-panel .draft-item").should("have.length", 1);
+    cy.get(".messages-panel").contains("button", "Load").click();
+    cy.toast("Loaded from Discord");
+    cy.location("hash").should("eq", "");
+    cy.get(".discord-messages").should("exist");
+    cy.contains("button", "Update published").should("not.be.disabled");
+  });
+
   it("keeps a deleted message as history and publishes it again as a new one", () => {
     cy.contains("button", "Delete from Discord").click();
     cy.wait("@delete");
