@@ -27,7 +27,21 @@ export function saveAsNewDraft(): boolean {
   return true;
 }
 
-/** Update the current draft, or save a new one. Returns false if cancelled. */
+/** Save the draft as its next version, keeping the current one as it is. */
+export function saveNewVersion(): boolean {
+  const id = editableDraftId();
+  if (!id) return saveAsNewDraft();
+  if (!isDirty.value) {
+    toast("info", "No changes to save", getDraft(id)?.name);
+    return true;
+  }
+  updateDraftMessage(id, message.value, { newVersion: true });
+  markClean();
+  toast("success", `Saved as v${getDraft(id)?.revision}`, getDraft(id)?.name);
+  return true;
+}
+
+/** Update the current draft (saving over its current version where allowed), or save a new one. Returns false if cancelled. */
 export function saveDraft(): boolean {
   const id = editableDraftId();
   if (!id) return saveAsNewDraft();
@@ -35,9 +49,11 @@ export function saveDraft(): boolean {
     toast("info", "No changes to save", getDraft(id)?.name);
     return true;
   }
+  const before = getDraft(id)?.revision;
   updateDraftMessage(id, message.value);
   markClean();
-  toast("success", "Draft updated", getDraft(id)?.name);
+  const d = getDraft(id);
+  toast("success", "Draft updated", d?.revision === before ? `Saved over v${d?.revision}` : `Saved as v${d?.revision}`);
   return true;
 }
 

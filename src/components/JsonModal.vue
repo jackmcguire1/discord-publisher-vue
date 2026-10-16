@@ -39,7 +39,8 @@ function download() {
 
 function apply() {
   if (parseError.value) return;
-  replaceMessage(parseIncomingMessage(JSON.parse(text.value)), currentDraftId.value);
+  // An edit to the message being worked on, not a load: it stays unsaved until saved or published.
+  replaceMessage(parseIncomingMessage(JSON.parse(text.value)), currentDraftId.value, { edit: true });
   toast("success", "Message replaced from JSON");
   emit("close");
 }

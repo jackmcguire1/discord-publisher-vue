@@ -141,12 +141,17 @@ export function redo() {
 // --- mutations ---------------------------------------------------------------
 
 /** Replace the whole message (import, load draft, clear). */
-export function replaceMessage(next: Message, draftId: string | null = null) {
+export function replaceMessage(
+  next: Message,
+  draftId: string | null = null,
+  /** `edit`: the new content is a change to the current message (e.g. applied JSON), so it shows as unsaved. */
+  opts: { edit?: boolean } = {}
+) {
   untouchedNew.value = null;
   message.value = next;
   currentDraftId.value = draftId;
   errors.value = validateMessage(next);
-  markClean();
+  if (!opts.edit) markClean();
 }
 
 export function addEmbed() {

@@ -331,6 +331,22 @@ describe("message revisions", () => {
     await assertSucceeds(getDocs(collection(as("viewer"), "orgs", ORG, "drafts", "d1", "revisions")));
   });
 
+  it("only the current saved version past v1 can be saved over, and only its content", async () => {
+    await seed({ ...draft, revision: 2, revisionId: "r2" }, {
+      r1: rev("member", "saved"),
+      r2: rev("member", "saved", { number: 2 }),
+    });
+    const change = (who) => ({ message: { content: "new" }, updatedAt: now, updatedBy: people[who].email });
+    await assertSucceeds(updateDoc(revDoc(as("viewer"), "r2"), change("viewer")));
+    await assertFails(updateDoc(revDoc(as("viewer"), "r1"), change("viewer"))); // not current, and v1
+    await assertFails(updateDoc(revDoc(as("viewer"), "r2"), { ...change("viewer"), number: 9 }));
+    await assertFails(updateDoc(revDoc(as("viewer"), "r2"), change("admin"))); // someone else's name
+    await assertFails(updateDoc(revDoc(as("outsider"), "r2"), change("outsider")));
+    // A published version is never saved over.
+    await seed({ ...draft, revision: 3, revisionId: "r3" }, { r3: rev("member", "published", { number: 3 }) });
+    await assertFails(updateDoc(revDoc(as("admin"), "r3"), change("admin")));
+  });
+
   it("revisions can't be forged or edited", async () => {
     await seed(draft, { r1: rev("member", "saved") });
     await assertFails(setDoc(revDoc(as("member"), "r2"), rev("admin", "saved"))); // someone else's name

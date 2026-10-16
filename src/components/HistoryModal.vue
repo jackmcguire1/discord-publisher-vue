@@ -3,7 +3,7 @@ import { ref, computed, onMounted } from "vue";
 import Modal from "./Modal.vue";
 import MessagePreview from "./MessagePreview.vue";
 import { listRevisions, deleteRevision, type Revision, type RevisionKind } from "../stores/revisions";
-import { getDraft } from "../stores/drafts";
+import { getDraft, forgetRevision } from "../stores/drafts";
 import { currentDraftId, isDirty, replaceMessage, markCleanAs } from "../stores/message";
 import { historyFor, selectWebhookFor } from "../stores/editorActions";
 import { navigate } from "../router";
@@ -52,6 +52,7 @@ async function remove(r: Revision) {
   if (!confirm(`Delete v${r.number}? The other versions and the message itself aren't affected.`)) return;
   try {
     await deleteRevision(draftId, r);
+    forgetRevision(draftId, r.id);
     revisions.value = revisions.value.filter((x) => x.id !== r.id);
     if (previewing.value === r.id) previewing.value = null;
     toast("success", `Deleted v${r.number}`);
@@ -95,6 +96,7 @@ function restore(r: Revision) {
             </div>
             <div class="draft-meta">
               {{ formatDateTime(r.createdAt) }}<template v-if="r.createdBy"> by {{ r.createdBy }}</template>
+              <template v-if="r.updatedAt"> · last saved {{ formatDateTime(r.updatedAt) }}<template v-if="r.updatedBy"> by {{ r.updatedBy }}</template></template>
               · {{ summary(r) }}<template v-if="r.note"> · {{ r.note }}</template>
             </div>
             <div v-if="previewing === r.id" class="revision-preview">

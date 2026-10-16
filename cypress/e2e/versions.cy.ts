@@ -46,7 +46,9 @@ describe("message versions", () => {
     content().should("have.value", "First version");
     cy.get(".editing-name").should("contain.text", "unsaved changes");
 
-    cy.contains("button", "Update draft").click();
+    // Keep v2 as it is and save the restored content as the next version.
+    cy.get(".new-version").click();
+    cy.toast("Saved as v3");
     cy.get(".message-panel .revision-tag").should("have.text", "v3");
     cy.get(".editor-history").click();
     cy.get(".revision-item").should("have.length", 3);
@@ -138,5 +140,68 @@ describe("message versions", () => {
     cy.get('.revision-item[data-revision="1"]').should("contain.text", "Original text").and("contain.text", "before history");
     cy.get('.revision-item[data-revision="2"]').should("contain.text", "New text");
     revisionDocs().should("have.length", 2);
+  });
+
+  it("applying JSON to an open draft counts as a change that can be saved", () => {
+    cy.visitClean();
+    cy.window().then((w) => cy.stub(w, "prompt").returns("From JSON"));
+    cy.contains("button", "Save draft").click();
+    cy.get(".message-panel .revision-tag").should("have.text", "v1");
+
+    cy.openModal("JSON");
+    cy.get(".modal textarea").clear().type('{"content":"Edited in JSON"}', { delay: 0, parseSpecialCharSequences: false });
+    cy.contains(".modal button", "Apply to editor").click();
+    content().should("have.value", "Edited in JSON");
+    cy.get(".editing-name").should("contain.text", "unsaved changes");
+
+    cy.contains("button", "Update draft").click();
+    cy.toast("Draft updated");
+    cy.get(".message-panel .revision-tag").should("have.text", "v2");
+    cy.get(".editing-name").should("not.contain.text", "unsaved changes");
+  });
+
+  it("Update draft saves over the current version; New version starts the next one", () => {
+    cy.visitClean();
+    cy.window().then((w) => cy.stub(w, "prompt").returns("Iterating"));
+    content().type("A", { delay: 0 });
+    cy.contains("button", "Save draft").click();
+
+    // v1 is the starting point, so the first update makes v2...
+    content().type("B", { delay: 0 });
+    cy.contains("button", "Update draft").click();
+    cy.contains(".toast-message", "Saved as v2").should("be.visible");
+    // ...and later updates save over v2 instead of piling up versions.
+    content().type("C", { delay: 0 });
+    cy.contains("button", "Update draft").should("have.attr", "title").and("contain", "Save over v2");
+    cy.contains("button", "Update draft").click();
+    cy.contains(".toast-message", "Saved over v2").should("be.visible");
+    cy.get(".message-panel .revision-tag").should("have.text", "v2");
+    revisionDocs().should("have.length", 2);
+
+    content().type("D", { delay: 0 });
+    cy.get(".new-version").click();
+    cy.toast("Saved as v3");
+    revisionDocs().should("have.length", 3);
+
+    cy.get(".editor-history").click();
+    cy.get('.revision-item[data-revision="2"]').should("contain.text", "ABC").and("contain.text", "last saved");
+    cy.get('.revision-item[data-revision="3"]').should("contain.text", "ABCD");
+  });
+
+  it("applying JSON to an open draft counts as a change that can be saved", () => {
+    cy.visitClean();
+    cy.window().then((w) => cy.stub(w, "prompt").returns("From JSON"));
+    cy.contains("button", "Save draft").click();
+
+    cy.openModal("JSON");
+    cy.get(".modal textarea").clear().type('{"content":"Edited in JSON"}', { delay: 0, parseSpecialCharSequences: false });
+    cy.contains(".modal button", "Apply to editor").click();
+    content().should("have.value", "Edited in JSON");
+    cy.get(".editing-name").should("contain.text", "unsaved changes");
+
+    cy.contains("button", "Update draft").click();
+    cy.toast("Draft updated");
+    cy.get(".message-panel .revision-tag").should("have.text", "v2");
+    cy.get(".editing-name").should("not.contain.text", "unsaved changes");
   });
 });

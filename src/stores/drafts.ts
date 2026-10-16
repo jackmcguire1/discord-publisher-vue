@@ -1,7 +1,7 @@
 import { computed } from "vue";
 import { orgCollection } from "./orgCollection";
 import { myEmail } from "./session";
-import { addRevision, deleteRevisions, type RevisionKind } from "./revisions";
+import { addRevision, overwriteRevision, deleteRevisions, type RevisionKind } from "./revisions";
 import type { Message } from "../discord/schema";
 import { parseIncomingMessage } from "../discord/schema";
 import type { PublishedRef } from "../discord/webhook";
@@ -37,6 +37,9 @@ export interface Draft {
   deleted?: PublishInfo & { deletedAt: string; deletedBy?: string };
   /** Number of the latest revision (see revisions.ts); 0 before the first, absent on messages from before versioning. */
   revision?: number;
+  /** Id and kind of the latest revision, so "Update draft" can save over it. */
+  revisionId?: string;
+  revisionKind?: RevisionKind;
 }
 
 export type MessageStatus = "draft" | "published" | "deleted";
@@ -78,9 +81,23 @@ function revise(id: string, kind: RevisionKind, message: Message, note?: string)
   return record(id, number, kind, message, note);
 }
 
-function record(id: string, number: number, kind: RevisionKind, message: Message, note?: string): { revision: number } {
-  addRevision(id, { number, kind, message: clone(message), createdAt: new Date().toISOString(), createdBy: myEmail() || undefined, note });
-  return { revision: number };
+function record(id: string, number: number, kind: RevisionKind, message: Message, note?: string) {
+  const revisionId = addRevision(id, { number, kind, message: clone(message), createdAt: new Date().toISOString(), createdBy: myEmail() || undefined, note });
+  return { revision: number, revisionId, revisionKind: kind };
+}
+
+/**
+ * Whether saving can overwrite the latest version rather than add one: only a
+ * saved version past v1 (v1 is the starting point; published/updated versions
+ * are the record of what went to Discord).
+ */
+export function canOverwriteVersion(d: Draft | undefined): boolean {
+  return !!d && !!d.revisionId && d.revisionKind === "saved" && (d.revision ?? 0) > 1;
+}
+
+/** After a version is deleted from History: if it was the current one, the next save starts a new version. */
+export function forgetRevision(id: string, revisionId: string) {
+  if (getDraft(id)?.revisionId === revisionId) store.update(id, { revisionId: undefined, revisionKind: undefined });
 }
 
 export function createDraft(
@@ -121,16 +138,29 @@ function ensureBaseline(id: string) {
   store.update(id, record(id, 1, base, d.message, "Version from before history was kept"));
 }
 
-export function updateDraftMessage(id: string, message: Message, opts: { revision?: boolean } = {}): Draft | undefined {
+/**
+ * Save new content to a draft. By default it saves over the current version
+ * when that's allowed (see canOverwriteVersion), otherwise it adds one;
+ * `newVersion` always adds one, and `revision: false` records none (a publish
+ * revision follows).
+ */
+export function updateDraftMessage(
+  id: string,
+  message: Message,
+  opts: { revision?: boolean; newVersion?: boolean } = {}
+): Draft | undefined {
   const d = getDraft(id);
   if (!d) return;
   ensureBaseline(id);
-  store.update(id, {
-    message: clone(message),
-    updatedAt: new Date().toISOString(),
-    updatedBy: myEmail() || undefined,
-    ...(opts.revision !== false && revise(id, "saved", message)),
-  });
+  const now = new Date().toISOString();
+  const by = myEmail() || undefined;
+  let version = {};
+  if (opts.revision !== false) {
+    const current = getDraft(id);
+    if (!opts.newVersion && canOverwriteVersion(current)) overwriteRevision(id, current!.revisionId!, { message: clone(message), updatedAt: now, updatedBy: by });
+    else version = revise(id, "saved", message);
+  }
+  store.update(id, { message: clone(message), updatedAt: now, updatedBy: by, ...version });
   return d;
 }
 

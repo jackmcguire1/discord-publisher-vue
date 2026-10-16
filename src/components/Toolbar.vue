@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { currentDraftId, undo, redo, canUndo, canRedo, isDirty } from "../stores/message";
-import { drafts, getDraft, statusOf } from "../stores/drafts";
+import { drafts, getDraft, statusOf, canOverwriteVersion } from "../stores/drafts";
 import { openAuthors, savedAuthors } from "../stores/authors";
-import { saveDraft, saveAsNewDraft as saveAsNew, requestNewMessage, openHistory } from "../stores/editorActions";
+import { saveDraft, saveNewVersion, saveAsNewDraft as saveAsNew, requestNewMessage, openHistory } from "../stores/editorActions";
 
 // Header and toolbar of the Message panel: what is being edited, actions on
 // the message as a whole (history, list, new), then editing tools and saving.
@@ -14,6 +14,13 @@ const draft = computed(() => getDraft(currentDraftId.value));
 /** Published and deleted messages are history; saving starts a new draft rather than changing them. */
 const editableDraft = computed(() => (draft.value && statusOf(draft.value) === "draft" ? draft.value : undefined));
 const status = computed(() => (draft.value ? statusOf(draft.value) : null));
+const nextVersion = computed(() => (draft.value?.revision ?? 0) + 1);
+/** What "Update draft" will do with the current version. */
+const updateHint = computed(() =>
+  canOverwriteVersion(editableDraft.value)
+    ? `Save over v${editableDraft.value!.revision} (use New version to keep it)`
+    : `Save as v${nextVersion.value}`
+);
 </script>
 
 <template>
@@ -54,8 +61,16 @@ const status = computed(() => (draft.value ? statusOf(draft.value) : null));
       Authors <span class="tag">{{ savedAuthors.length }}</span>
     </button>
     <div class="toolbar-spacer" />
-    <button v-if="editableDraft" class="btn btn-ghost btn-sm" @click="saveAsNew">Save as new</button>
-    <button class="btn btn-sm save-draft" :class="{ 'btn-primary': isDirty }" @click="saveDraft">
+    <button v-if="editableDraft" class="btn btn-ghost btn-sm" title="Save as a separate message" @click="saveAsNew">Save as new</button>
+    <button
+      v-if="editableDraft"
+      class="btn btn-ghost btn-sm new-version"
+      :title="`Keep the current version and save these changes as v${nextVersion}`"
+      @click="saveNewVersion"
+    >
+      New version
+    </button>
+    <button class="btn btn-sm save-draft" :class="{ 'btn-primary': isDirty }" :title="editableDraft ? updateHint : ''" @click="saveDraft">
       {{ editableDraft ? "Update draft" : draft ? "Save as draft" : "Save draft" }}
     </button>
   </div>

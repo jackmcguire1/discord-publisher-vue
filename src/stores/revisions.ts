@@ -1,4 +1,4 @@
-import { collection, deleteDoc, doc, getDocs, setDoc, writeBatch } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDocs, setDoc, updateDoc, writeBatch } from "firebase/firestore";
 import { db } from "../firebase";
 import { activeOrgId, isGuest } from "./session";
 import { load, save } from "./persist";
@@ -22,6 +22,9 @@ export interface Revision {
   createdAt: string;
   createdBy?: string;
   note?: string;
+  /** Set when a saved version was overwritten by "Update draft". */
+  updatedAt?: string;
+  updatedBy?: string;
 }
 
 const GUEST_KEY = "revisions";
@@ -38,18 +41,37 @@ function col(draftId: string) {
   return collection(db, "orgs", activeOrgId.value, "drafts", draftId, "revisions");
 }
 
-/** Save a revision. Fire-and-forget; failures are reported as a toast. */
-export function addRevision(draftId: string, rev: Omit<Revision, "id">) {
+function stripUndefined(rev: Record<string, unknown>) {
+  const data = { ...rev };
+  for (const k of Object.keys(data)) if (data[k] === undefined) delete data[k];
+  return data;
+}
+
+/** Save a revision and return its id. Fire-and-forget; failures are reported as a toast. */
+export function addRevision(draftId: string, rev: Omit<Revision, "id">): string {
+  if (isGuest.value) {
+    const id = newLocalId();
+    const all = load<GuestRevisions>(GUEST_KEY, {});
+    all[draftId] = [...(all[draftId] ?? []), { ...rev, id }];
+    save(GUEST_KEY, all);
+    return id;
+  }
+  const ref = doc(col(draftId));
+  setDoc(ref, stripUndefined(rev)).catch((e: Error) => toast("error", "Could not save revision", e.message));
+  return ref.id;
+}
+
+/** Overwrite the content of the current saved version ("Update draft"). Fire-and-forget. */
+export function overwriteRevision(draftId: string, revisionId: string, change: { message: Message; updatedAt: string; updatedBy?: string }) {
   if (isGuest.value) {
     const all = load<GuestRevisions>(GUEST_KEY, {});
-    all[draftId] = [...(all[draftId] ?? []), { ...rev, id: newLocalId() }];
+    all[draftId] = (all[draftId] ?? []).map((r) => (r.id === revisionId ? { ...r, ...change } : r));
     save(GUEST_KEY, all);
     return;
   }
-  const ref = doc(col(draftId));
-  const data: Record<string, unknown> = { ...rev };
-  for (const k of Object.keys(data)) if (data[k] === undefined) delete data[k];
-  setDoc(ref, data).catch((e: Error) => toast("error", "Could not save revision", e.message));
+  updateDoc(doc(col(draftId), revisionId), stripUndefined(change)).catch((e: Error) =>
+    toast("error", "Could not save version", e.message)
+  );
 }
 
 /** All revisions of a message, newest first. */

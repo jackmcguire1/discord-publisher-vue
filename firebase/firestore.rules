@@ -8,7 +8,7 @@ rules_version = '2';
 //   orgs/{orgId}/webhooks/{id}      admins write, members read (holds the webhook token)
 //   orgs/{orgId}/authors/{id}       members read/write
 //   orgs/{orgId}/drafts/{id}        messages: drafts, published (`published`) and deleted from Discord (`deleted`)
-//     .../revisions/{revId}         { number, kind: saved|published|updated, message, createdAt, createdBy, note? }, immutable
+//     .../revisions/{revId}         { number, kind: saved|published|updated, message, createdAt, createdBy, note?, updatedAt?, updatedBy? }
 //
 // Permissions: owners and admins can do everything. Members carry two flags:
 // canPublish (default true) to publish and update messages on Discord, and
@@ -273,7 +273,15 @@ service cloud.firestore {
             && request.resource.data.get('createdBy', myEmail()) == myEmail()
             && (request.resource.data.kind == 'saved'
               || (request.resource.data.kind in ['published', 'updated'] && canPublish(orgId)));
-          allow update: if false;
+          // "Update draft" saves over the message's current version, if it's a
+          // saved one past v1. Everything else about a version is fixed.
+          allow update: if isMember(orgId)
+            && resource.data.kind == 'saved'
+            && resource.data.number > 1
+            && get(draftDoc()).data.get('revisionId', null) == revId
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['message', 'updatedAt', 'updatedBy'])
+            && request.resource.data.message is map
+            && request.resource.data.get('updatedBy', myEmail()) == myEmail();
           allow delete: if isMember(orgId) && (
             (resource.data.kind == 'saved' && resource.data.number != 1)
             || canDelete(orgId)
