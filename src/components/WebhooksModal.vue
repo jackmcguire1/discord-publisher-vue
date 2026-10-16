@@ -5,6 +5,7 @@ import Field from "./Field.vue";
 import { savedWebhooks, addWebhook, updateWebhook, deleteWebhook, selectWebhook, type SavedWebhook } from "../stores/webhooks";
 import { servers, addServer, updateServer, deleteServer, type Server } from "../stores/servers";
 import { settings } from "../stores/settings";
+import { canManage } from "../stores/session";
 import { parseWebhookUrl, maskWebhookUrl } from "../discord/webhook";
 import { toast } from "../stores/toasts";
 
@@ -134,7 +135,7 @@ function onServerPick(e: Event) {
       <section class="stack" style="--gap: 8px">
         <div class="row row-between">
           <h2 style="margin: 0">Servers <span class="muted" style="font-weight: 400">{{ servers.length }}</span></h2>
-          <button v-if="!showServerForm" class="btn btn-sm" @click="showServerForm = true">+ Add server</button>
+          <button v-if="canManage && !showServerForm" class="btn btn-sm" @click="showServerForm = true">+ Add server</button>
         </div>
         <p class="muted small" style="margin: 0">Group webhooks and drafts by Discord server. The server ID is optional and only used to build “open in Discord” links.</p>
 
@@ -153,7 +154,7 @@ function onServerPick(e: Event) {
                 {{ savedWebhooks.filter((w) => w.serverId === s.id).length }} webhook{{ savedWebhooks.filter((w) => w.serverId === s.id).length === 1 ? "" : "s" }}<template v-if="s.guildId"> · id {{ s.guildId }}</template>
               </span>
             </div>
-            <div class="row">
+            <div v-if="canManage" class="row">
               <button class="btn btn-sm btn-ghost" @click="startEditServer(s)">Edit</button>
               <button class="btn btn-sm btn-danger" @click="removeServer(s)">✕</button>
             </div>
@@ -166,7 +167,7 @@ function onServerPick(e: Event) {
       <section class="stack" style="--gap: 8px">
         <h2 style="margin: 0">Webhooks <span class="muted" style="font-weight: 400">{{ savedWebhooks.length }}</span></h2>
         <div v-if="!savedWebhooks.length" class="empty" style="padding: 8px 0">
-          No saved webhooks yet. Add one below and it becomes selectable in the publish panel.
+          No saved webhooks yet.<template v-if="canManage"> Add one below and it becomes selectable in the publish panel.</template>
         </div>
         <template v-for="g in groups" :key="g.server?.id ?? 'none'">
           <div v-if="g.webhooks.length" class="webhook-group">
@@ -183,8 +184,10 @@ function onServerPick(e: Event) {
                 </div>
                 <div class="row">
                   <button class="btn btn-sm btn-primary" :disabled="w.id === settings.webhookId" @click="use(w)">Use</button>
-                  <button class="btn btn-sm btn-ghost" @click="startEdit(w)">Edit</button>
-                  <button class="btn btn-sm btn-danger" @click="remove(w)">✕</button>
+                  <template v-if="canManage">
+                    <button class="btn btn-sm btn-ghost" @click="startEdit(w)">Edit</button>
+                    <button class="btn btn-sm btn-danger" @click="remove(w)">✕</button>
+                  </template>
                 </div>
               </div>
             </div>
@@ -194,7 +197,8 @@ function onServerPick(e: Event) {
 
       <hr class="divider" />
 
-      <form class="stack" @submit.prevent="save">
+      <p v-if="!canManage" class="muted small admin-only-note" style="margin: 0">Only organization admins can add or change webhooks and servers.</p>
+      <form v-else class="stack" @submit.prevent="save">
         <h2 style="margin: 0">{{ editingId ? "Edit webhook" : "Add webhook" }}</h2>
         <div class="grid-3">
           <Field label="Nickname" :count="form.name.length" :max="60">

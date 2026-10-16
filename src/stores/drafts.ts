@@ -1,10 +1,10 @@
-import { ref, computed } from "vue";
-import { load, persistRef } from "./persist";
+import { computed } from "vue";
+import { orgCollection } from "./orgCollection";
 import type { Message } from "../discord/schema";
 import { parseIncomingMessage } from "../discord/schema";
 import type { PublishedRef } from "../discord/webhook";
 
-// Drafts live in localStorage. Each one remembers where it was last published
+// Drafts are shared with the active org (orgs/{orgId}/drafts). Each one remembers where it was last published
 // so it can be edited or deleted on Discord later. The webhook token is never
 // stored on a draft; only the webhook id, so we can tell whether the currently
 // configured webhook is the one that owns the published message.
@@ -29,18 +29,12 @@ export interface DraftsFile {
   servers?: { id: string; name: string; guildId: string }[];
 }
 
-const state = ref<Draft[]>(load<Draft[]>("drafts", []));
-persistRef("drafts", state);
+const store = orgCollection<Draft>("drafts");
+const state = store.items;
 
 export const drafts = computed(() =>
   [...state.value].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
 );
-
-function newId(): string {
-  return typeof crypto?.randomUUID === "function"
-    ? crypto.randomUUID()
-    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-}
 
 function clone<T>(v: T): T {
   return JSON.parse(JSON.stringify(v));
@@ -52,43 +46,42 @@ export function getDraft(id: string | null): Draft | undefined {
 
 export function createDraft(name: string, message: Message, serverId: string | null = null): Draft {
   const now = new Date().toISOString();
-  const draft: Draft = { id: newId(), name: name.trim() || "Untitled", createdAt: now, updatedAt: now, message: clone(message), serverId };
-  state.value.push(draft);
+  const draft: Draft = { id: store.newId(), name: name.trim() || "Untitled", createdAt: now, updatedAt: now, message: clone(message), serverId };
+  store.set(draft);
   return draft;
 }
 
 export function updateDraftMessage(id: string, message: Message): Draft | undefined {
   const d = getDraft(id);
   if (!d) return;
-  d.message = clone(message);
-  d.updatedAt = new Date().toISOString();
+  store.update(id, { message: clone(message), updatedAt: new Date().toISOString() });
   return d;
 }
 
 export function renameDraft(id: string, name: string) {
   const d = getDraft(id);
   if (!d) return;
-  d.name = name.trim() || d.name;
-  d.updatedAt = new Date().toISOString();
+  store.update(id, { name: name.trim() || d.name, updatedAt: new Date().toISOString() });
 }
 
 export function setDraftServer(id: string, serverId: string | null) {
   const d = getDraft(id);
   if (!d) return;
-  d.serverId = serverId;
-  d.updatedAt = new Date().toISOString();
+  store.update(id, { serverId, updatedAt: new Date().toISOString() });
 }
 
 /** Unassign every draft that was filed under a deleted server. */
 export function clearDraftServer(serverId: string) {
-  for (const d of state.value) if (d.serverId === serverId) d.serverId = null;
+  for (const d of state.value) if (d.serverId === serverId) store.update(d.id, { serverId: null });
 }
 
 export function setDraftPublished(id: string, ref: PublishedRef | null) {
   const d = getDraft(id);
   if (!d) return;
-  d.published = ref ? { ...ref, publishedAt: new Date().toISOString() } : undefined;
-  d.updatedAt = new Date().toISOString();
+  store.update(id, {
+    published: ref ? { ...ref, publishedAt: new Date().toISOString() } : undefined,
+    updatedAt: new Date().toISOString(),
+  });
 }
 
 export function duplicateDraft(id: string): Draft | undefined {
@@ -98,7 +91,7 @@ export function duplicateDraft(id: string): Draft | undefined {
 }
 
 export function deleteDraft(id: string) {
-  state.value = state.value.filter((d) => d.id !== id);
+  store.remove(id);
 }
 
 export function exportDrafts(
@@ -144,7 +137,7 @@ export function importDrafts(
     const name = looksLikeDraft && typeof item.name === "string" ? item.name : fallbackName;
     const now = new Date().toISOString();
     const draft: Draft = {
-      id: newId(),
+      id: store.newId(),
       name,
       createdAt: looksLikeDraft && typeof item.createdAt === "string" ? item.createdAt : now,
       updatedAt: now,
@@ -158,7 +151,7 @@ export function importDrafts(
           ? item.published
           : undefined,
     };
-    state.value.push(draft);
+    store.set(draft);
     added++;
   }
   return added;

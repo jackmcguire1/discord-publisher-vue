@@ -251,3 +251,15 @@ select.input option { background: var(--bg-0); color: var(--text-strong); }
 .author-menu-footer { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 4px; }
 .author-avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; flex: none; background: var(--bg-4); }
 .author-avatar-empty { display: flex; align-items: center; justify-content: center; font-weight: 700; color: var(--text-muted); }
+
+/* Sign-in and organization setup screens */
+.gate {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+.gate-card {
+  width: 100%;
+  max-width: 440px;
+}

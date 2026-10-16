@@ -1,9 +1,10 @@
 import { ref } from "vue";
-import { load, persistRef } from "./persist";
+import { orgCollection } from "./orgCollection";
 
 // Reusable author profiles: a display name, a link and an avatar. One profile
 // can be applied as the webhook identity (username + avatar) or as an embed's
 // author block (name + url + icon), so the same brand is set up once.
+// Shared with every member of the active org.
 
 export interface Author {
   id: string;
@@ -15,14 +16,8 @@ export interface Author {
 
 export type AuthorInput = { name: string; url?: string; avatarUrl?: string };
 
-export const savedAuthors = ref<Author[]>(load<Author[]>("authors", []));
-persistRef("authors", savedAuthors);
-
-function newId(): string {
-  return typeof crypto?.randomUUID === "function"
-    ? crypto.randomUUID()
-    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-}
+const store = orgCollection<Author>("authors");
+export const savedAuthors = store.items;
 
 export function getAuthor(id: string | null | undefined): Author | undefined {
   return id ? savedAuthors.value.find((a) => a.id === id) : undefined;
@@ -30,26 +25,28 @@ export function getAuthor(id: string | null | undefined): Author | undefined {
 
 export function addAuthor(input: AuthorInput): Author {
   const a: Author = {
-    id: newId(),
+    id: store.newId(),
     name: input.name.trim(),
     url: (input.url ?? "").trim(),
     avatarUrl: (input.avatarUrl ?? "").trim(),
     createdAt: new Date().toISOString(),
   };
-  savedAuthors.value.push(a);
+  store.set(a);
   return a;
 }
 
 export function updateAuthor(id: string, patch: Partial<AuthorInput>) {
   const a = getAuthor(id);
   if (!a) return;
-  if (patch.name !== undefined) a.name = patch.name.trim() || a.name;
-  if (patch.url !== undefined) a.url = patch.url.trim();
-  if (patch.avatarUrl !== undefined) a.avatarUrl = patch.avatarUrl.trim();
+  const out: Partial<Author> = {};
+  if (patch.name !== undefined) out.name = patch.name.trim() || a.name;
+  if (patch.url !== undefined) out.url = patch.url.trim();
+  if (patch.avatarUrl !== undefined) out.avatarUrl = patch.avatarUrl.trim();
+  store.update(id, out);
 }
 
 export function deleteAuthor(id: string) {
-  savedAuthors.value = savedAuthors.value.filter((a) => a.id !== id);
+  store.remove(id);
 }
 
 // The authors dialog can be opened from several places (toolbar, webhook

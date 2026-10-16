@@ -1,0 +1,182 @@
+// Security rules tests. Run with `yarn test:rules` (starts the emulators).
+import { readFileSync } from "node:fs";
+import { after, before, beforeEach, describe, it } from "node:test";
+import { initializeTestEnvironment, assertFails, assertSucceeds } from "@firebase/rules-unit-testing";
+import {
+  collectionGroup,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  setDoc,
+  updateDoc,
+  where,
+  writeBatch,
+} from "firebase/firestore";
+
+const ORG = "org1";
+const WEBHOOK_URL = "https://discord.com/api/webhooks/123/abc-DEF_1";
+const now = "2026-01-01T00:00:00.000Z";
+
+let env;
+
+const people = {
+  owner: { uid: "owner", email: "owner@example.com" },
+  admin: { uid: "admin", email: "admin@example.com" },
+  member: { uid: "member", email: "member@example.com" },
+  outsider: { uid: "outsider", email: "outsider@example.com" },
+  invitee: { uid: "invitee", email: "invitee@example.com" },
+};
+
+/** Firestore as a signed-in user with a verified email (as email-link sign-in gives). */
+function as(who, verified = true) {
+  const p = people[who];
+  return env.authenticatedContext(p.uid, { email: p.email, email_verified: verified }).firestore();
+}
+
+before(async () => {
+  env = await initializeTestEnvironment({
+    projectId: "demo-discord-publisher",
+    firestore: { rules: readFileSync("firebase/firestore.rules", "utf8") },
+  });
+});
+
+after(() => env.cleanup());
+
+beforeEach(async () => {
+  await env.clearFirestore();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, "orgs", ORG), { name: "Org", ownerUid: "owner", createdAt: now });
+    for (const role of ["owner", "admin", "member"]) {
+      const p = people[role];
+      await setDoc(doc(db, "orgs", ORG, "members", p.uid), { uid: p.uid, email: p.email, role, joinedAt: now });
+    }
+    await setDoc(doc(db, "orgs", ORG, "webhooks", "w1"), { name: "Hook", description: "", url: WEBHOOK_URL, serverId: null, createdAt: now });
+    await setDoc(doc(db, "orgs", ORG, "invites", people.invitee.email), {
+      email: people.invitee.email,
+      role: "member",
+      orgName: "Org",
+      invitedBy: "owner",
+      createdAt: now,
+    });
+  });
+});
+
+describe("org content", () => {
+  it("members read webhooks, outsiders and signed-out users cannot", async () => {
+    await assertSucceeds(getDoc(doc(as("member"), "orgs", ORG, "webhooks", "w1")));
+    await assertFails(getDoc(doc(as("outsider"), "orgs", ORG, "webhooks", "w1")));
+    await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), "orgs", ORG, "webhooks", "w1")));
+  });
+
+  it("only admins write webhooks, and only valid Discord URLs", async () => {
+    const hook = { name: "New", description: "", url: WEBHOOK_URL, serverId: null, createdAt: now };
+    await assertFails(setDoc(doc(as("member"), "orgs", ORG, "webhooks", "w2"), hook));
+    await assertSucceeds(setDoc(doc(as("admin"), "orgs", ORG, "webhooks", "w2"), hook));
+    await assertFails(setDoc(doc(as("admin"), "orgs", ORG, "webhooks", "w3"), { ...hook, url: "https://evil.example/api/webhooks/1/x" }));
+    await assertFails(deleteDoc(doc(as("member"), "orgs", ORG, "webhooks", "w1")));
+    await assertSucceeds(deleteDoc(doc(as("owner"), "orgs", ORG, "webhooks", "w1")));
+  });
+
+  it("members write drafts and authors; outsiders cannot", async () => {
+    const draft = { name: "D", createdAt: now, updatedAt: now, serverId: null, message: { content: "hi", tts: false, embeds: [] } };
+    await assertSucceeds(setDoc(doc(as("member"), "orgs", ORG, "drafts", "d1"), draft));
+    await assertFails(setDoc(doc(as("outsider"), "orgs", ORG, "drafts", "d2"), draft));
+    const author = { name: "A", url: "", avatarUrl: "", createdAt: now };
+    await assertSucceeds(setDoc(doc(as("member"), "orgs", ORG, "authors", "a1"), author));
+    await assertFails(setDoc(doc(as("outsider"), "orgs", ORG, "authors", "a2"), author));
+  });
+});
+
+describe("creating orgs", () => {
+  it("a verified user creates an org and becomes its owner in one batch", async () => {
+    const db = as("outsider");
+    const batch = writeBatch(db);
+    batch.set(doc(db, "orgs", "org2"), { name: "Mine", ownerUid: "outsider", createdAt: now });
+    batch.set(doc(db, "orgs", "org2", "members", "outsider"), { uid: "outsider", email: people.outsider.email, role: "owner", joinedAt: now });
+    await assertSucceeds(batch.commit());
+  });
+
+  it("cannot claim ownership of an existing org", async () => {
+    const db = as("outsider");
+    await assertFails(
+      setDoc(doc(db, "orgs", ORG, "members", "outsider"), { uid: "outsider", email: people.outsider.email, role: "owner", joinedAt: now })
+    );
+  });
+
+  it("unverified emails cannot create orgs", async () => {
+    const db = as("outsider", false);
+    await assertFails(setDoc(doc(db, "orgs", "org3"), { name: "X", ownerUid: "outsider", createdAt: now }));
+  });
+});
+
+describe("invites", () => {
+  it("only admins invite, and never as owner", async () => {
+    const invite = (email, role, invitedBy) => ({ email, role, orgName: "Org", invitedBy, createdAt: now });
+    await assertFails(setDoc(doc(as("member"), "orgs", ORG, "invites", "x@example.com"), invite("x@example.com", "member", "member")));
+    await assertSucceeds(setDoc(doc(as("admin"), "orgs", ORG, "invites", "x@example.com"), invite("x@example.com", "member", "admin")));
+    await assertFails(setDoc(doc(as("admin"), "orgs", ORG, "invites", "y@example.com"), invite("y@example.com", "owner", "admin")));
+  });
+
+  it("the invitee sees their invite via a collection group query", async () => {
+    const db = as("invitee");
+    const snap = await assertSucceeds(getDocs(query(collectionGroup(db, "invites"), where("email", "==", people.invitee.email))));
+    if (snap.size !== 1) throw new Error(`expected 1 invite, got ${snap.size}`);
+    await assertFails(getDocs(query(collectionGroup(as("outsider"), "invites"), where("email", "==", people.invitee.email))));
+  });
+
+  it("the invitee joins with the invited role and removes the invite", async () => {
+    const db = as("invitee");
+    const batch = writeBatch(db);
+    batch.set(doc(db, "orgs", ORG, "members", "invitee"), { uid: "invitee", email: people.invitee.email, role: "member", joinedAt: now });
+    batch.delete(doc(db, "orgs", ORG, "invites", people.invitee.email));
+    await assertSucceeds(batch.commit());
+  });
+
+  it("the invitee cannot upgrade their own role", async () => {
+    await assertFails(
+      setDoc(doc(as("invitee"), "orgs", ORG, "members", "invitee"), { uid: "invitee", email: people.invitee.email, role: "admin", joinedAt: now })
+    );
+  });
+
+  it("someone without an invite cannot join", async () => {
+    await assertFails(
+      setDoc(doc(as("outsider"), "orgs", ORG, "members", "outsider"), { uid: "outsider", email: people.outsider.email, role: "member", joinedAt: now })
+    );
+  });
+
+  it("an unverified email cannot use the invite", async () => {
+    await assertFails(
+      setDoc(doc(as("invitee", false), "orgs", ORG, "members", "invitee"), { uid: "invitee", email: people.invitee.email, role: "member", joinedAt: now })
+    );
+  });
+});
+
+describe("membership management", () => {
+  it("admins change member roles, but not the owner's or their own", async () => {
+    await assertSucceeds(updateDoc(doc(as("admin"), "orgs", ORG, "members", "member"), { role: "admin" }));
+    await assertFails(updateDoc(doc(as("admin"), "orgs", ORG, "members", "owner"), { role: "member" }));
+    await assertFails(updateDoc(doc(as("member"), "orgs", ORG, "members", "member"), { role: "admin" }));
+    await assertFails(updateDoc(doc(as("admin"), "orgs", ORG, "members", "member"), { role: "owner" }));
+  });
+
+  it("admins remove members, members leave, the owner stays", async () => {
+    await assertFails(deleteDoc(doc(as("member"), "orgs", ORG, "members", "admin")));
+    await assertSucceeds(deleteDoc(doc(as("member"), "orgs", ORG, "members", "member")));
+    await assertFails(deleteDoc(doc(as("admin"), "orgs", ORG, "members", "owner")));
+    await assertFails(deleteDoc(doc(as("owner"), "orgs", ORG, "members", "owner")));
+  });
+
+  it("a user lists only their own memberships", async () => {
+    await assertSucceeds(getDocs(query(collectionGroup(as("member"), "members"), where("uid", "==", "member"))));
+    await assertFails(getDocs(query(collectionGroup(as("outsider"), "members"), where("uid", "==", "member"))));
+  });
+
+  it("only admins rename the org, and nobody changes its owner", async () => {
+    await assertFails(updateDoc(doc(as("member"), "orgs", ORG), { name: "Hijacked" }));
+    await assertSucceeds(updateDoc(doc(as("admin"), "orgs", ORG), { name: "Renamed" }));
+    await assertFails(updateDoc(doc(as("admin"), "orgs", ORG), { ownerUid: "admin" }));
+  });
+});

@@ -13,8 +13,24 @@ import WebhooksModal from "./components/WebhooksModal.vue";
 import AuthorsModal from "./components/AuthorsModal.vue";
 import { authorsDialog } from "./stores/authors";
 import Toasts from "./components/Toasts.vue";
+import SignIn from "./components/SignIn.vue";
+import OrgSetup from "./components/OrgSetup.vue";
+import OrgModal from "./components/OrgModal.vue";
+import {
+  user,
+  authReady,
+  membershipsReady,
+  memberships,
+  orgNames,
+  activeOrgId,
+  activeRole,
+  switchOrg,
+  signOut,
+  completeSignInFromLink,
+} from "./stores/session";
+import { hasLegacyData } from "./stores/legacy";
 
-type View = "json" | "curl" | "drafts" | "webhooks" | null;
+type View = "json" | "curl" | "drafts" | "webhooks" | "org" | null;
 const view = ref<View>(null);
 const draft = computed(() => getDraft(currentDraftId.value));
 
@@ -28,14 +44,44 @@ function onKey(e: KeyboardEvent) {
     e.shiftKey ? redo() : undo();
   }
 }
+const signInError = ref<string | null>(null);
+completeSignInFromLink().then((err) => (signInError.value = err));
+
 onMounted(() => window.addEventListener("keydown", onKey));
 onUnmounted(() => window.removeEventListener("keydown", onKey));
 </script>
 
 <template>
-  <div class="app">
+  <div v-if="!authReady || (user && !membershipsReady)" class="gate muted">Loading…</div>
+  <SignIn v-else-if="!user" :error="signInError" />
+  <OrgSetup v-else-if="!activeOrgId" />
+  <div v-else class="app">
     <div class="pane pane-editor">
       <div class="stack">
+        <div class="row row-between org-bar">
+          <div class="row">
+            <select
+              v-if="memberships.length > 1"
+              class="input org-select"
+              style="width: auto"
+              :value="activeOrgId ?? ''"
+              @change="switchOrg(($event.target as HTMLSelectElement).value)"
+            >
+              <option v-for="m in memberships" :key="m.orgId" :value="m.orgId">{{ orgNames[m.orgId] || "…" }}</option>
+            </select>
+            <strong v-else class="org-current">{{ orgNames[activeOrgId] || "…" }}</strong>
+            <span class="tag">{{ activeRole }}</span>
+            <button class="btn btn-ghost btn-sm" @click="view = 'org'">Organization</button>
+          </div>
+          <div class="row">
+            <span class="muted small user-email">{{ user.email }}</span>
+            <button class="btn btn-ghost btn-sm" @click="signOut">Sign out</button>
+          </div>
+        </div>
+        <div v-if="hasLegacyData" class="banner banner-info row row-between legacy-banner">
+          <span>This browser still has webhooks, authors or drafts from before sign-in.</span>
+          <button class="btn btn-sm" @click="view = 'org'">Import…</button>
+        </div>
         <div class="row row-between">
           <h1>Discord Publisher</h1>
           <span v-if="draft" class="muted small">Draft: <strong>{{ draft.name }}</strong></span>
@@ -57,7 +103,8 @@ onUnmounted(() => window.removeEventListener("keydown", onKey));
     <CurlModal v-if="view === 'curl'" @close="view = null" />
     <DraftsModal v-if="view === 'drafts'" @close="view = null" />
     <WebhooksModal v-if="view === 'webhooks'" @close="view = null" />
+    <OrgModal v-if="view === 'org'" @close="view = null" />
     <AuthorsModal v-if="authorsDialog" :key="JSON.stringify(authorsDialog.prefill)" />
-    <Toasts />
   </div>
+  <Toasts />
 </template>

@@ -9,3 +9,9 @@ dist-ssr
 cypress/screenshots
 cypress/videos
 cypress/downloads
+
+# firebase
+.firebase
+*-debug.log
+firebase-export-*
+.emulator-data

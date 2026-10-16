@@ -12,6 +12,7 @@ let nextId = 1;
 
 export function toast(type: Toast["type"], title: string, message?: string, ttl = 5000) {
   const id = nextId++;
+  if (type === "error") console.error(title, message ?? "");
   toasts.value.push({ id, type, title, message });
   if (ttl > 0) setTimeout(() => dismissToast(id), ttl);
 }

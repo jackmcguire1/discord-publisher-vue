@@ -7,6 +7,7 @@ import { message, isValid, errors, currentDraftId } from "../stores/message";
 import { getDraft, createDraft, updateDraftMessage, setDraftPublished, setDraftServer } from "../stores/drafts";
 import { sendMessage, editMessage, deleteMessage, messageLink, type DiscordApiError } from "../discord/webhook";
 import { toast } from "../stores/toasts";
+import { canManage } from "../stores/session";
 import { formatDateTime } from "../util";
 import Field from "./Field.vue";
 
@@ -166,7 +167,7 @@ async function remove() {
             @input="onUrlInput"
           />
           <button class="btn btn-ghost btn-sm" @click="showUrl = !showUrl">{{ showUrl ? "Hide" : "Show" }}</button>
-          <button v-if="!selected && webhookInfo" class="btn btn-ghost btn-sm" title="Save this URL with a nickname" @click="emit('manage')">Save…</button>
+          <button v-if="canManage && !selected && webhookInfo" class="btn btn-ghost btn-sm" title="Save this URL with a nickname" @click="emit('manage')">Save…</button>
         </div>
       </Field>
 
