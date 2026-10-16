@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, nextTick } from "vue";
 import {
   drafts,
   deleteDraft,
@@ -100,6 +100,23 @@ async function load(d: Draft) {
   emit("loaded");
 }
 
+/** Id of a just-created copy, highlighted for a moment so it's easy to spot. */
+const justAdded = ref<string | null>(null);
+
+async function duplicate(d: Draft) {
+  const copy = duplicateDraft(d.id);
+  if (!copy) return;
+  // A copy is always a plain draft, so leave a filter that would hide it.
+  if (filter.value !== "all" && filter.value !== "draft") filter.value = "all";
+  toast("success", "Message duplicated", isHistory(d) ? `"${copy.name}" is a new draft; the original keeps its publish history.` : `"${copy.name}"`);
+  justAdded.value = copy.id;
+  await nextTick();
+  document.querySelector(`[data-message-id="${copy.id}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  setTimeout(() => {
+    if (justAdded.value === copy.id) justAdded.value = null;
+  }, 2500);
+}
+
 function isHistory(d: Draft) {
   return statusOf(d) !== "draft";
 }
@@ -189,7 +206,13 @@ async function importFiles(e: Event) {
       <div v-for="g in groups" :key="g.server?.id ?? 'none'" class="draft-group">
         <div class="group-label">{{ g.server ? g.server.name : servers.length ? "Unassigned" : "" }}</div>
         <div class="draft-list">
-          <div v-for="d in g.drafts" :key="d.id" class="draft draft-item" :class="{ active: d.id === currentDraftId }">
+          <div
+            v-for="d in g.drafts"
+            :key="d.id"
+            class="draft draft-item"
+            :class="{ active: d.id === currentDraftId, 'just-added': d.id === justAdded }"
+            :data-message-id="d.id"
+          >
             <div class="grow">
               <div class="row">
                 <span class="draft-name">{{ d.name }}</span>
@@ -217,7 +240,7 @@ async function importFiles(e: Event) {
               </select>
               <button class="btn btn-sm btn-primary" :disabled="loading === d.id" @click="load(d)">{{ loading === d.id ? "Loading…" : "Load" }}</button>
               <button class="btn btn-sm btn-ghost" title="Rename" @click="rename(d)">Rename</button>
-              <button class="btn btn-sm btn-ghost" @click="duplicateDraft(d.id)">Duplicate</button>
+              <button class="btn btn-sm btn-ghost" @click="duplicate(d)">Duplicate</button>
               <button class="btn btn-sm btn-ghost" @click="exportOne(d)">Export</button>
               <button
                 class="btn btn-sm btn-danger"

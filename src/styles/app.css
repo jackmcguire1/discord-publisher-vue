@@ -207,6 +207,11 @@ textarea.input.code { font-family: var(--mono); font-size: 12px; min-height: 240
   background: var(--bg-1); border: 1px solid var(--border); border-radius: var(--radius);
 }
 .draft.active { border-color: var(--blurple); }
+.draft.just-added { animation: just-added 2.5s ease-out; }
+@keyframes just-added {
+  0%, 40% { border-color: var(--green); box-shadow: 0 0 0 2px rgba(35, 165, 89, .35); }
+  100% { box-shadow: 0 0 0 0 rgba(35, 165, 89, 0); }
+}
 .draft-name { font-weight: 600; color: var(--text-strong); }
 .draft-meta { font-size: 12px; color: var(--text-muted); }
 .empty { text-align: center; color: var(--text-muted); padding: 32px 0; }

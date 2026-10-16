@@ -56,6 +56,24 @@ describe("messages: published history", () => {
     cy.contains("button", "Update published").should("not.be.disabled");
   });
 
+  it("duplicating from the Published filter switches to All and saves the copy to the org", () => {
+    cy.contains(".nav-link", "Messages").click();
+    cy.get('[data-filter="published"]').click();
+    cy.get(".draft-item").should("have.length", 1).contains("button", "Duplicate").click();
+    cy.toast("Message duplicated");
+    cy.get('[data-filter="all"]').should("have.attr", "aria-selected", "true");
+    cy.get(".draft-item").should("have.length", 2);
+    cy.get(".draft-item.just-added").should("exist").find(".tag-green").should("not.exist");
+
+    // It's in Firestore, not just on screen.
+    const FS = "http://127.0.0.1:8080/v1/projects/demo-discord-publisher/databases/(default)/documents";
+    const get = (path: string) => cy.request({ url: `${FS}/${path}`, headers: { Authorization: "Bearer owner" } });
+    get("orgs").then(({ body }) => {
+      const org = body.documents[0].name.split("/documents/")[1];
+      get(`${org}/drafts`).its("body.documents").should("have.length", 2);
+    });
+  });
+
   it("keeps a deleted message as history and publishes it again as a new one", () => {
     cy.contains("button", "Delete from Discord").click();
     cy.wait("@delete");
