@@ -1,11 +1,12 @@
-import { ref, watch } from "vue";
-import { load, persistRef } from "./persist";
+import { watch } from "vue";
+import { orgCollection } from "./orgCollection";
 import { settings } from "./settings";
 import { parseWebhookUrl } from "../discord/webhook";
 
 // Saved webhooks: a nickname and description for each webhook URL so you can
-// pick a destination by name instead of pasting URLs around. Stored in this
-// browser only; URLs contain the secret token and are never put in draft exports.
+// pick a destination by name instead of pasting URLs around. Shared with the
+// active org (orgs/{orgId}/webhooks): every member can read them, only admins
+// can change them. URLs contain the secret token and are never put in draft exports.
 
 export interface SavedWebhook {
   id: string;
@@ -17,14 +18,8 @@ export interface SavedWebhook {
   createdAt: string;
 }
 
-export const savedWebhooks = ref<SavedWebhook[]>(load<SavedWebhook[]>("webhooks", []));
-persistRef("webhooks", savedWebhooks);
-
-function newId(): string {
-  return typeof crypto?.randomUUID === "function"
-    ? crypto.randomUUID()
-    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-}
+const store = orgCollection<SavedWebhook>("webhooks");
+export const savedWebhooks = store.items;
 
 export function getWebhook(id: string | null | undefined): SavedWebhook | undefined {
   return id ? savedWebhooks.value.find((w) => w.id === id) : undefined;
@@ -40,33 +35,35 @@ export function addWebhook(input: { name: string; description?: string; url: str
   const info = parseWebhookUrl(input.url);
   if (!info) throw new Error("Not a Discord webhook URL");
   const w: SavedWebhook = {
-    id: newId(),
+    id: store.newId(),
     name: input.name.trim() || `Webhook ${info.id.slice(-4)}`,
     description: (input.description ?? "").trim(),
     url: info.url,
     serverId: input.serverId ?? null,
     createdAt: new Date().toISOString(),
   };
-  savedWebhooks.value.push(w);
+  store.set(w);
   return w;
 }
 
 export function updateWebhook(id: string, patch: { name?: string; description?: string; url?: string; serverId?: string | null }) {
   const w = getWebhook(id);
   if (!w) return;
+  const out: Partial<SavedWebhook> = {};
   if (patch.url !== undefined) {
     const info = parseWebhookUrl(patch.url);
     if (!info) throw new Error("Not a Discord webhook URL");
-    w.url = info.url;
+    out.url = info.url;
   }
-  if (patch.name !== undefined) w.name = patch.name.trim() || w.name;
-  if (patch.description !== undefined) w.description = patch.description.trim();
-  if (patch.serverId !== undefined) w.serverId = patch.serverId;
+  if (patch.name !== undefined) out.name = patch.name.trim() || w.name;
+  if (patch.description !== undefined) out.description = patch.description.trim();
+  if (patch.serverId !== undefined) out.serverId = patch.serverId;
+  store.update(id, out);
 }
 
 /** Ungroup every webhook that pointed at a deleted server. */
 export function clearWebhookServer(serverId: string) {
-  for (const w of savedWebhooks.value) if (w.serverId === serverId) w.serverId = null;
+  for (const w of savedWebhooks.value) if (w.serverId === serverId) store.update(w.id, { serverId: null });
 }
 
 /** The server of the webhook currently selected in the publish panel, if any. */
@@ -75,7 +72,7 @@ export function selectedWebhookServerId(): string | null {
 }
 
 export function deleteWebhook(id: string) {
-  savedWebhooks.value = savedWebhooks.value.filter((w) => w.id !== id);
+  store.remove(id);
   if (settings.value.webhookId === id) settings.value.webhookId = null;
 }
 

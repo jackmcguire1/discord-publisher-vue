@@ -21,16 +21,20 @@ jobs:
           node-version: 22
           cache: yarn
       - run: yarn install --frozen-lockfile
+      # The Firebase emulators need Java; cache their downloaded jars.
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ hashFiles('yarn.lock') }}
       - run: yarn typecheck
       - run: yarn build
-      - name: Cypress
-        uses: cypress-io/github-action@v7
-        with:
-          install: false
-          start: yarn dev:test
-          wait-on: http://localhost:5180
-          wait-on-timeout: 60
-          browser: chrome
+      - run: yarn test:rules
+      - name: Cypress (against the Firebase emulators)
+        run: yarn test
       - uses: actions/upload-artifact@v7
         if: failure()
         with:

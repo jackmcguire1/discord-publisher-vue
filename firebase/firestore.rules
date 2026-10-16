@@ -1,0 +1,160 @@
+rules_version = '2';
+
+// Data model
+//   orgs/{orgId}                    { name, ownerUid, createdAt }
+//   orgs/{orgId}/members/{uid}      { uid, email, role: owner|admin|member, joinedAt }
+//   orgs/{orgId}/invites/{email}    { email, role: admin|member, orgName, invitedBy, createdAt }
+//   orgs/{orgId}/servers/{id}       admins write, members read
+//   orgs/{orgId}/webhooks/{id}      admins write, members read (holds the webhook token)
+//   orgs/{orgId}/authors/{id}       members read/write
+//   orgs/{orgId}/drafts/{id}        members read/write
+//
+// Everything is scoped to an org. Users join by creating an org (becoming its
+// owner) or by accepting an invite addressed to their verified email.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function myEmail() {
+      return request.auth.token.email.lower();
+    }
+
+    function verified() {
+      return signedIn() && request.auth.token.email_verified == true;
+    }
+
+    function orgPath(orgId) {
+      return /databases/$(database)/documents/orgs/$(orgId);
+    }
+
+    function memberPath(orgId) {
+      return /databases/$(database)/documents/orgs/$(orgId)/members/$(request.auth.uid);
+    }
+
+    function isMember(orgId) {
+      return signedIn() && exists(memberPath(orgId));
+    }
+
+    function role(orgId) {
+      return get(memberPath(orgId)).data.role;
+    }
+
+    function isAdmin(orgId) {
+      return isMember(orgId) && role(orgId) in ['owner', 'admin'];
+    }
+
+    function onlyChanges(fields) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
+    }
+
+    function shortString(v, max) {
+      return v is string && v.size() <= max;
+    }
+
+    // A user's own memberships and invites, across all orgs (collection group queries).
+    match /{path=**}/members/{uid} {
+      allow read: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+    match /{path=**}/invites/{inviteId} {
+      allow read: if verified() && resource.data.email == myEmail();
+    }
+
+    match /orgs/{orgId} {
+      allow read: if isMember(orgId);
+      allow create: if verified()
+        && request.resource.data.keys().hasOnly(['name', 'ownerUid', 'createdAt'])
+        && request.resource.data.ownerUid == request.auth.uid
+        && shortString(request.resource.data.name, 100)
+        && request.resource.data.name.size() > 0;
+      allow update: if isAdmin(orgId)
+        && onlyChanges(['name'])
+        && shortString(request.resource.data.name, 100)
+        && request.resource.data.name.size() > 0;
+      // Subcollections are not removed with the org doc, so deletion is left to the console for now.
+      allow delete: if false;
+
+      match /members/{uid} {
+        allow read: if isMember(orgId);
+
+        allow create: if signedIn()
+          && uid == request.auth.uid
+          && request.resource.data.keys().hasOnly(['uid', 'email', 'role', 'joinedAt'])
+          && request.resource.data.uid == uid
+          && request.resource.data.email == myEmail()
+          && (
+            // The creator becomes owner in the same batch that creates the org.
+            (request.resource.data.role == 'owner'
+              && !exists(orgPath(orgId))
+              && getAfter(orgPath(orgId)).data.ownerUid == request.auth.uid)
+            ||
+            // Accepting an invite addressed to this (verified) email, with the invited role.
+            (verified()
+              && exists(/databases/$(database)/documents/orgs/$(orgId)/invites/$(myEmail()))
+              && get(/databases/$(database)/documents/orgs/$(orgId)/invites/$(myEmail())).data.role == request.resource.data.role)
+          );
+
+        // Admins can switch others between admin and member; the owner's role is fixed.
+        allow update: if isAdmin(orgId)
+          && uid != request.auth.uid
+          && resource.data.role != 'owner'
+          && onlyChanges(['role'])
+          && request.resource.data.role in ['admin', 'member'];
+
+        // Admins remove others; anyone but the owner can leave.
+        allow delete: if resource.data.role != 'owner'
+          && (uid == request.auth.uid || isAdmin(orgId));
+      }
+
+      match /invites/{inviteEmail} {
+        allow read: if isMember(orgId) || (verified() && inviteEmail == myEmail());
+        allow create, update: if isAdmin(orgId)
+          && request.resource.data.keys().hasOnly(['email', 'role', 'orgName', 'invitedBy', 'createdAt'])
+          && request.resource.data.email == inviteEmail
+          && inviteEmail == inviteEmail.lower()
+          && shortString(inviteEmail, 320)
+          && request.resource.data.role in ['admin', 'member']
+          && request.resource.data.invitedBy == request.auth.uid
+          && shortString(request.resource.data.orgName, 100);
+        // Admins revoke; the invitee removes it when accepting or declining.
+        allow delete: if isAdmin(orgId) || (verified() && inviteEmail == myEmail());
+      }
+
+      match /servers/{id} {
+        allow read: if isMember(orgId);
+        allow create, update: if isAdmin(orgId)
+          && shortString(request.resource.data.name, 100)
+          && shortString(request.resource.data.guildId, 32);
+        allow delete: if isAdmin(orgId);
+      }
+
+      match /webhooks/{id} {
+        allow read: if isMember(orgId);
+        allow create, update: if isAdmin(orgId)
+          && shortString(request.resource.data.name, 100)
+          && shortString(request.resource.data.description, 500)
+          && request.resource.data.url is string
+          && request.resource.data.url.matches('^https?://((canary|ptb)[.])?discord(app)?[.]com/api(/v[0-9]+)?/webhooks/[0-9]+/[A-Za-z0-9_-]+$');
+        allow delete: if isAdmin(orgId);
+      }
+
+      match /authors/{id} {
+        allow read, delete: if isMember(orgId);
+        allow create, update: if isMember(orgId)
+          && shortString(request.resource.data.name, 256)
+          && shortString(request.resource.data.url, 2048)
+          && shortString(request.resource.data.avatarUrl, 2048);
+      }
+
+      match /drafts/{id} {
+        allow read, delete: if isMember(orgId);
+        allow create, update: if isMember(orgId)
+          && shortString(request.resource.data.name, 200)
+          && request.resource.data.message is map;
+      }
+    }
+  }
+}

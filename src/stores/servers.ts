@@ -1,11 +1,11 @@
-import { ref, computed } from "vue";
-import { load, persistRef } from "./persist";
+import { computed } from "vue";
+import { orgCollection } from "./orgCollection";
 import { clearWebhookServer } from "./webhooks";
 import { clearDraftServer } from "./drafts";
 
 // A "server" groups webhooks and drafts that belong to the same Discord server
 // (or organisation). The optional Discord server id makes "open in Discord"
-// links resolve to the right place.
+// links resolve to the right place. Shared with the active org; admins edit.
 
 export interface Server {
   id: string;
@@ -15,16 +15,10 @@ export interface Server {
   createdAt: string;
 }
 
-const state = ref<Server[]>(load<Server[]>("servers", []));
-persistRef("servers", state);
+const store = orgCollection<Server>("servers");
+const state = store.items;
 
 export const servers = computed(() => [...state.value].sort((a, b) => a.name.localeCompare(b.name)));
-
-function newId(): string {
-  return typeof crypto?.randomUUID === "function"
-    ? crypto.randomUUID()
-    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-}
 
 export function getServer(id: string | null | undefined): Server | undefined {
   return id ? state.value.find((s) => s.id === id) : undefined;
@@ -37,25 +31,27 @@ export function findServerByName(name: string): Server | undefined {
 
 export function addServer(input: { name: string; guildId?: string }): Server {
   const s: Server = {
-    id: newId(),
+    id: store.newId(),
     name: input.name.trim() || "Untitled server",
     guildId: (input.guildId ?? "").trim(),
     createdAt: new Date().toISOString(),
   };
-  state.value.push(s);
+  store.set(s);
   return s;
 }
 
 export function updateServer(id: string, patch: { name?: string; guildId?: string }) {
   const s = getServer(id);
   if (!s) return;
-  if (patch.name !== undefined) s.name = patch.name.trim() || s.name;
-  if (patch.guildId !== undefined) s.guildId = patch.guildId.trim();
+  const out: Partial<Server> = {};
+  if (patch.name !== undefined) out.name = patch.name.trim() || s.name;
+  if (patch.guildId !== undefined) out.guildId = patch.guildId.trim();
+  store.update(id, out);
 }
 
 /** Remove a server. Its webhooks and drafts are kept, just ungrouped. */
 export function deleteServer(id: string) {
-  state.value = state.value.filter((s) => s.id !== id);
+  store.remove(id);
   clearWebhookServer(id);
   clearDraftServer(id);
 }
