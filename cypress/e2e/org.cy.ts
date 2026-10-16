@@ -3,14 +3,6 @@ import { WEBHOOK, USER_EMAIL } from "../support/e2e";
 const TEAMMATE = "teammate@example.com";
 
 describe("sign-in and organizations", () => {
-  it("asks for an email before showing the editor", () => {
-    cy.resetEmulators();
-    cy.clearLocalStorage();
-    cy.visit("/");
-    cy.contains("button", "Email me a sign-in link").should("be.visible");
-    cy.get(".discord-messages").should("not.exist");
-  });
-
   it("signs in, creates an org and stays signed in across reloads", () => {
     cy.visitClean();
     cy.get(".org-current").should("have.text", "Test Org");
@@ -19,7 +11,7 @@ describe("sign-in and organizations", () => {
     cy.reload();
     cy.get(".org-current").should("have.text", "Test Org");
     cy.contains("button", "Sign out").click();
-    cy.contains("button", "Email me a sign-in link").should("be.visible");
+    cy.get(".guest-bar").should("be.visible");
   });
 
   it("invites a teammate who joins as a member and shares the org's webhooks", () => {

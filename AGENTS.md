@@ -4,7 +4,7 @@ Guidance for Codex when working in this repository.
 
 ## What this is
 
-A minimal Vue 3 + Vite + TypeScript app for composing and publishing Discord webhook messages (content + embeds). It replaces a forked React "Embed Generator" with a stripped-down rewrite. Users sign in with Firebase Auth (email link only) and work inside organizations; webhooks, servers, authors and drafts live in Firestore under the active org. There is no server code (no Cloud Functions): the browser still calls Discord directly, so any org member can read webhook tokens, and Firestore rules are the only access control. Firebase Storage is deliberately not used (it needs the Blaze plan). No router, no UI framework and no state library.
+A minimal Vue 3 + Vite + TypeScript app for composing and publishing Discord webhook messages (content + embeds). It replaces a forked React "Embed Generator" with a stripped-down rewrite. Guests (signed out) use the full editor with webhooks, servers, authors and drafts in localStorage, like the original app. Signing in (Firebase Auth, email link only) moves the user into organizations, where those collections live in Firestore under the active org; guest data can then be imported. There is no server code (no Cloud Functions): the browser still calls Discord directly, so any org member can read webhook tokens, and Firestore rules are the only access control. Firebase Storage is deliberately not used (it needs the Blaze plan). No router, no UI framework and no state library.
 
 ## Commands
 
@@ -31,15 +31,15 @@ CI (`.github/workflows/ci.yml`) runs typecheck, build, the rules tests and the C
 - `src/firebase.ts` – Firebase app/auth/firestore init; connects to the emulators when `VITE_FIREBASE_EMULATORS=true`.
 - `firebase/firestore.rules` – the security model (data model documented at the top of the Firestore rules). Change them together with `tests/rules/`.
 - `src/stores/session.ts` – auth (email link), the user's memberships and invites, `activeOrgId`, `canManage`, `createOrg`/`acceptInvite`. `src/stores/org.ts` – members/invites of the active org and admin actions.
-- `src/stores/orgCollection.ts` – mirrors `orgs/{activeOrgId}/{name}` into a reactive array and writes through optimistically, so `webhooks`, `servers`, `authors` and `drafts` keep a synchronous API.
-- `src/stores/*` (others) – `message` (undo/redo + validation), `settings` and `toasts` stay per-device in `localStorage` via `persist.ts` (prefix `discord-publisher:`). `legacy.ts` offers a one-time import of pre-Firebase localStorage data into the active org. `settings.webhookId` points at a saved webhook; a hand-typed URL sets it to null.
+- `src/stores/orgCollection.ts` – mirrors `orgs/{activeOrgId}/{name}` into a reactive array and writes through optimistically, so `webhooks`, `servers`, `authors` and `drafts` keep a synchronous API. For guests the same API reads and writes localStorage under `name` instead; guests never touch Firestore, so the rules don't cover them.
+- `src/stores/*` (others) – `message` (undo/redo + validation), `settings` and `toasts` stay per-device in `localStorage` via `persist.ts` (prefix `discord-publisher:`). `legacy.ts` offers to import guest (and pre-Firebase) localStorage data into the active org after sign-in. `settings.webhookId` points at a saved webhook; a hand-typed URL sets it to null.
 - `src/components/*` – editor, preview, publish panel, and the JSON / cURL / drafts modals.
-- `cypress/e2e/*.cy.ts` – e2e specs; `cypress/support/e2e.ts` holds the custom commands. `cy.visitClean()` wipes the emulators, signs in through the real email-link flow (reading the auth emulator's outbox) and creates an org. Discord is stubbed with `cy.intercept`, never called for real.
+- `cypress/e2e/*.cy.ts` – e2e specs; `cypress/support/e2e.ts` holds the custom commands. `cy.visitClean()` wipes the emulators, signs in through the real email-link flow (reading the auth emulator's outbox) and creates an org; `cy.visitGuest()` opens the editor signed out. Discord is stubbed with `cy.intercept`, never called for real.
 - `src/styles/app.css` – app styling via CSS variables. `src/styles/preview.css` is a pruned port of the discord-components stylesheet; only touch it for preview fidelity.
 
 ## Conventions
 
-- Roles: `owner` | `admin` | `member`. Admins manage webhooks, servers, invites and roles; every member reads everything and writes authors and drafts. Hide admin-only UI behind `canManage`, but the rules are the real enforcement.
+- Roles: `owner` | `admin` | `member`. Admins manage webhooks, servers, invites and roles; every member reads everything and writes authors and drafts. Hide admin-only UI behind `canManage` (true for guests, who own their local data), but the rules are the real enforcement.
 - Membership listeners ignore docs with pending writes: attaching org listeners before the membership commits gets them permanently denied.
 - The Firebase web config in `.env` is public by design; never commit service-account keys.
 - Keep dependencies minimal. Prefer a few lines of code over a new package.

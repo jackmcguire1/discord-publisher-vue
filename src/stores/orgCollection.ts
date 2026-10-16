@@ -1,12 +1,16 @@
 import { ref, watch, type Ref } from "vue";
 import { collection, deleteDoc, deleteField, doc, onSnapshot, setDoc, updateDoc } from "firebase/firestore";
 import { db } from "../firebase";
-import { activeOrgId } from "./session";
+import { activeOrgId, authReady, user } from "./session";
+import { load, save } from "./persist";
 import { toast } from "./toasts";
 
-// A Firestore subcollection of the active org (orgs/{orgId}/{name}) mirrored
+// A collection shared through the active org (orgs/{orgId}/{name}) mirrored
 // into a reactive array. Writes update the array straight away so callers can
 // keep treating stores as synchronous; the snapshot listener then confirms them.
+//
+// Guests (signed out) get the same API backed by localStorage under `name`.
+// Those keys are what legacy.ts offers to import once the guest signs in.
 
 export interface OrgCollection<T extends { id: string }> {
   items: Ref<T[]>;
@@ -18,16 +22,23 @@ export interface OrgCollection<T extends { id: string }> {
   remove(id: string): void;
 }
 
+function localId(): string {
+  return typeof crypto?.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 export function orgCollection<T extends { id: string }>(name: string): OrgCollection<T> {
   const items = ref<T[]>([]) as Ref<T[]>;
   let stop: (() => void) | null = null;
+  const guest = () => authReady.value && !user.value;
 
   watch(
-    activeOrgId,
-    (orgId) => {
+    [activeOrgId, guest],
+    ([orgId, isGuest]) => {
       stop?.();
       stop = null;
-      items.value = [];
+      items.value = isGuest ? load<T[]>(name, []) : [];
       if (!orgId) return;
       stop = onSnapshot(
         collection(db, "orgs", orgId, name),
@@ -47,26 +58,32 @@ export function orgCollection<T extends { id: string }>(name: string): OrgCollec
     toast("error", `Could not save ${name}`, e.message);
   }
 
+  /** For guests, write the array through to localStorage; otherwise run the Firestore write. */
+  function commit(remote: () => Promise<unknown>) {
+    if (guest()) save(name, items.value);
+    else remote().catch(failed);
+  }
+
   return {
     items,
-    newId: () => doc(col()).id,
+    newId: () => (guest() ? localId() : doc(col()).id),
     set(item) {
       const { id, ...data } = item;
       const i = items.value.findIndex((x) => x.id === id);
       if (i >= 0) items.value[i] = item;
       else items.value.push(item);
-      setDoc(doc(col(), id), data).catch(failed);
+      commit(() => setDoc(doc(col(), id), data));
     },
     update(id, patch) {
       const item = items.value.find((x) => x.id === id);
       if (item) Object.assign(item, patch);
       const data: Record<string, unknown> = {};
       for (const [k, v] of Object.entries(patch)) data[k] = v === undefined ? deleteField() : v;
-      updateDoc(doc(col(), id), data).catch(failed);
+      commit(() => updateDoc(doc(col(), id), data));
     },
     remove(id) {
       items.value = items.value.filter((x) => x.id !== id);
-      deleteDoc(doc(col(), id)).catch(failed);
+      commit(() => deleteDoc(doc(col(), id)));
     },
   };
 }

@@ -91,7 +91,7 @@ function discard() {
     <div class="stack">
       <section v-if="hasLegacyData" class="banner banner-info stack legacy-import" style="--gap: 8px">
         <div>
-          This browser has data from before sign-in:
+          This browser has data saved while signed out:
           {{ legacyCounts.webhooks }} webhooks, {{ legacyCounts.servers }} servers, {{ legacyCounts.authors }} authors and {{ legacyCounts.drafts }} drafts.
           <template v-if="!canManage"> Only admins can import webhooks and servers.</template>
         </div>

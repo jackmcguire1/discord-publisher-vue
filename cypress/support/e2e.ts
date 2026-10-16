@@ -14,6 +14,8 @@ declare global {
     interface Chainable {
       /** Wipe the emulators and localStorage, sign in and land in a fresh org's editor. */
       visitClean(): Chainable<void>;
+      /** Wipe localStorage and open the editor signed out. */
+      visitGuest(): Chainable<void>;
       /** Wipe all emulator data (users and documents). */
       resetEmulators(): Chainable<void>;
       /** Sign in through the email-link flow, using the auth emulator's outbox. */
@@ -39,6 +41,7 @@ Cypress.Commands.add("resetEmulators", () => {
 
 Cypress.Commands.add("signIn", (email = USER_EMAIL) => {
   cy.visit("/");
+  cy.contains(".guest-bar button", "Sign in").click();
   cy.get('input[type="email"]').type(email, { delay: 0 });
   cy.contains("button", "Email me a sign-in link").click();
   cy.get(".sign-in-sent").should("contain.text", email);
@@ -56,6 +59,14 @@ Cypress.Commands.add("signIn", (email = USER_EMAIL) => {
 Cypress.Commands.add("createOrg", (name = "Test Org") => {
   cy.get('input[placeholder="e.g. My Community"]').type(name, { delay: 0 });
   cy.contains("button", "Create organization").click();
+  cy.get(".discord-messages").should("exist");
+});
+
+Cypress.Commands.add("visitGuest", () => {
+  cy.resetEmulators();
+  cy.clearLocalStorage();
+  cy.visit("/");
+  cy.get(".guest-bar").should("be.visible");
   cy.get(".discord-messages").should("exist");
 });
 

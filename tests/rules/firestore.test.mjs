@@ -80,6 +80,24 @@ describe("org content", () => {
     await assertSucceeds(deleteDoc(doc(as("owner"), "orgs", ORG, "webhooks", "w1")));
   });
 
+  it("only admins create, edit and delete servers", async () => {
+    const server = { name: "Main", guildId: "123", createdAt: now };
+    await assertFails(setDoc(doc(as("member"), "orgs", ORG, "servers", "s1"), server));
+    await assertSucceeds(setDoc(doc(as("admin"), "orgs", ORG, "servers", "s1"), server));
+    await assertSucceeds(setDoc(doc(as("owner"), "orgs", ORG, "servers", "s2"), server));
+    await assertSucceeds(updateDoc(doc(as("admin"), "orgs", ORG, "servers", "s1"), { name: "Renamed" }));
+    await assertFails(updateDoc(doc(as("member"), "orgs", ORG, "servers", "s1"), { name: "Nope" }));
+    await assertSucceeds(getDoc(doc(as("member"), "orgs", ORG, "servers", "s1")));
+    await assertFails(deleteDoc(doc(as("member"), "orgs", ORG, "servers", "s1")));
+    await assertSucceeds(deleteDoc(doc(as("admin"), "orgs", ORG, "servers", "s1")));
+  });
+
+  it("admins file webhooks under servers and edit them", async () => {
+    await assertSucceeds(updateDoc(doc(as("admin"), "orgs", ORG, "webhooks", "w1"), { serverId: "s1", name: "Renamed" }));
+    await assertSucceeds(updateDoc(doc(as("owner"), "orgs", ORG, "webhooks", "w1"), { serverId: null }));
+    await assertFails(updateDoc(doc(as("member"), "orgs", ORG, "webhooks", "w1"), { name: "Nope" }));
+  });
+
   it("members write drafts and authors; outsiders cannot", async () => {
     const draft = { name: "D", createdAt: now, updatedAt: now, serverId: null, message: { content: "hi", tts: false, embeds: [] } };
     await assertSucceeds(setDoc(doc(as("member"), "orgs", ORG, "drafts", "d1"), draft));

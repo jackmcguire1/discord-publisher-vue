@@ -27,6 +27,8 @@ import {
   switchOrg,
   signOut,
   completeSignInFromLink,
+  isGuest,
+  signInOpen,
 } from "./stores/session";
 import { hasLegacyData } from "./stores/legacy";
 
@@ -45,7 +47,10 @@ function onKey(e: KeyboardEvent) {
   }
 }
 const signInError = ref<string | null>(null);
-completeSignInFromLink().then((err) => (signInError.value = err));
+completeSignInFromLink().then((err) => {
+  signInError.value = err;
+  if (err) signInOpen.value = true;
+});
 
 onMounted(() => window.addEventListener("keydown", onKey));
 onUnmounted(() => window.removeEventListener("keydown", onKey));
@@ -53,12 +58,19 @@ onUnmounted(() => window.removeEventListener("keydown", onKey));
 
 <template>
   <div v-if="!authReady || (user && !membershipsReady)" class="gate muted">Loading…</div>
-  <SignIn v-else-if="!user" :error="signInError" />
-  <OrgSetup v-else-if="!activeOrgId" />
+  <SignIn v-else-if="isGuest && signInOpen" :error="signInError" />
+  <OrgSetup v-else-if="user && !activeOrgId" />
   <div v-else class="app">
     <div class="pane pane-editor">
       <div class="stack">
-        <div class="row row-between org-bar">
+        <div v-if="isGuest" class="row row-between org-bar guest-bar">
+          <div class="row">
+            <strong>Guest</strong>
+            <span class="muted small">Saved in this browser only. Sign in to share webhooks and drafts with a team.</span>
+          </div>
+          <button class="btn btn-primary btn-sm" @click="signInOpen = true">Sign in</button>
+        </div>
+        <div v-else-if="user" class="row row-between org-bar">
           <div class="row">
             <select
               v-if="memberships.length > 1"
@@ -69,7 +81,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKey));
             >
               <option v-for="m in memberships" :key="m.orgId" :value="m.orgId">{{ orgNames[m.orgId] || "…" }}</option>
             </select>
-            <strong v-else class="org-current">{{ orgNames[activeOrgId] || "…" }}</strong>
+            <strong v-else class="org-current">{{ orgNames[activeOrgId ?? ""] || "…" }}</strong>
             <span class="tag">{{ activeRole }}</span>
             <button class="btn btn-ghost btn-sm" @click="view = 'org'">Organization</button>
           </div>
@@ -78,8 +90,8 @@ onUnmounted(() => window.removeEventListener("keydown", onKey));
             <button class="btn btn-ghost btn-sm" @click="signOut">Sign out</button>
           </div>
         </div>
-        <div v-if="hasLegacyData" class="banner banner-info row row-between legacy-banner">
-          <span>This browser still has webhooks, authors or drafts from before sign-in.</span>
+        <div v-if="user && hasLegacyData" class="banner banner-info row row-between legacy-banner">
+          <span>This browser has webhooks, authors or drafts saved while signed out.</span>
           <button class="btn btn-sm" @click="view = 'org'">Import…</button>
         </div>
         <div class="row row-between">

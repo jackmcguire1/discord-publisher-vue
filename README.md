@@ -1,10 +1,10 @@
 # Discord Publisher
 
-**Compose, preview, publish and track Discord webhook messages, entirely in your browser.**
+**Compose, preview, publish and track Discord webhook messages, together with your team.**
 
-Build the message in a form, see exactly how Discord will render it, send it with one click, and come back later to edit or delete what you sent. No backend, no login. Everything stays in your browser.
+Build the message in a form, see exactly how Discord will render it, send it with one click, and come back later to edit or delete what you sent. Use it straight away as a guest, with everything saved in your browser. Or sign in with your email (no password), create an organization, invite your team, and share webhooks, servers, authors and drafts between everyone in it.
 
-Built with Vue 3, Vite and TypeScript. Runtime dependencies: `vue`, `zod`, `simple-markdown` and `highlight.js`.
+Built with Vue 3, Vite, TypeScript and Firebase (Authentication and Firestore, on the free Spark plan). Runtime dependencies: `vue`, `firebase`, `zod`, `simple-markdown` and `highlight.js`.
 
 Live site: **https://jackmcguire1.github.io/discord-publisher-vue/**
 
@@ -15,15 +15,26 @@ Live site: **https://jackmcguire1.github.io/discord-publisher-vue/**
 - [Features](#features)
 - [Quick start](#quick-start)
 - [How to use it](#how-to-use-it)
+- [Organizations and roles](#organizations-and-roles)
 - [Discord limits enforced](#discord-limits-enforced)
 - [Testing and CI](#testing-and-ci)
 - [Deploying](#deploying)
-- [Storage and privacy](#storage-and-privacy)
+- [Firebase setup](#firebase-setup)
+- [Data and privacy](#data-and-privacy)
 - [How publishing works](#how-publishing-works)
 - [Project structure](#project-structure)
 - [Troubleshooting](#troubleshooting)
 
 ## Features
+
+### Accounts and organizations
+
+- **Guest mode**: no account needed. Webhooks, servers, authors and drafts are saved in this browser only.
+- **Passwordless sign-in**: enter your email, click the link you receive.
+- **Organizations** hold everything shared: webhooks, servers, authors and drafts. Belong to several and switch between them from the header.
+- **Invite by email**: admins invite an address as member or admin; that person joins the next time they sign in.
+- **Roles**: owners and admins manage webhooks, servers and membership; members use them and work on authors and drafts.
+- **Bring your guest data**: after signing in, webhooks, authors, servers and drafts saved as a guest can be imported into an organization in one click.
 
 ### Editing
 
@@ -45,7 +56,7 @@ Live site: **https://jackmcguire1.github.io/discord-publisher-vue/**
 
 - **Saved webhooks**: give each webhook URL a nickname and description, then pick the destination from a dropdown. Add, edit and delete them from the Manage dialog, or save a URL you have just typed with one click.
 - **Servers**: group webhooks by Discord server (or organisation). The dropdown groups by server, drafts are filed under the server they were published to, and an optional Discord server ID makes "open in Discord" links point at the right place.
-- Or paste a webhook URL directly. Either way it is stored in your browser and masked in the UI.
+- Or paste a webhook URL directly. Saved webhooks are shared with your organization; a pasted URL stays in your browser. Either way it is masked in the UI.
 - Optional **thread ID** for posting into forum posts or threads.
 - **Publish** sends the message and records the returned message ID.
 - **Update published** edits the message in place on Discord.
@@ -63,57 +74,68 @@ Live site: **https://jackmcguire1.github.io/discord-publisher-vue/**
 - Publishing automatically creates a draft if you have not saved one, so every send is tracked.
 - Drafts record when they were last updated and when and where they were published.
 - Drafts are grouped by server. A published draft is filed under its webhook's server automatically; you can move any draft between servers from the list.
-- Export one draft or all of them as JSON and import them on another machine or browser.
+- Drafts are shared with your organization, so anyone in it can pick one up, edit it and update the published message.
+- Export one draft or all of them as JSON and import them into another organization.
 
 ## Quick start
 
-Requires Node 20 or newer and Yarn 1.
+Requires Node 24.12 or newer, Yarn 1, and Java 21 or newer for the Firebase emulators. With [mise](https://mise.jdx.dev), `mise install` sets up Node and Java from `mise.toml`.
 
 ```bash
 git clone https://github.com/jackmcguire1/discord-publisher-vue.git
 cd discord-publisher-vue
 yarn install
-yarn dev
+yarn emulators   # terminal 1: local Firebase Auth + Firestore
+yarn dev         # terminal 2
 ```
 
-Open http://localhost:5173. Other scripts:
+Open http://localhost:5173. You start as a guest; click **Sign in** and use any email address. In development nothing is emailed: the sign-in link is printed in the `yarn emulators` output. The Emulator UI at http://localhost:4000 shows users and Firestore data.
 
-| Command          | What it does                                 |
-| ---------------- | -------------------------------------------- |
-| `yarn dev`       | Start the dev server with hot reload         |
-| `yarn typecheck` | Run `vue-tsc` across the project             |
-| `yarn build`     | Type-check, then build to `dist/`            |
-| `yarn preview`   | Serve the production build locally           |
-| `yarn test`      | Run the Cypress e2e suite headlessly         |
-| `yarn test:open` | Open the Cypress runner for development      |
+Development never touches the real Firebase project. `.env.development` points the app at the emulators under the `demo-discord-publisher` project id. Emulator data is saved to `.emulator-data/` when you stop the emulators with Ctrl+C and loaded again next time; delete that folder to start fresh.
+
+| Command             | What it does                                                    |
+| ------------------- | --------------------------------------------------------------- |
+| `yarn emulators`    | Start the Auth and Firestore emulators (UI on port 4000)        |
+| `yarn dev`          | Start the dev server with hot reload, against the emulators     |
+| `yarn typecheck`    | Run `vue-tsc` across the project                                |
+| `yarn build`        | Type-check, then build to `dist/` with the production config    |
+| `yarn preview`      | Serve the production build locally                              |
+| `yarn test`         | Start the emulators and run the Cypress e2e suite headlessly    |
+| `yarn test:open`    | Open the Cypress runner (start `yarn emulators` first)          |
+| `yarn test:rules`   | Run the Firestore security rules tests                          |
+| `yarn deploy:rules` | Deploy Firestore rules and indexes to production                |
 
 ## How to use it
 
-### 1. Get a webhook URL
+### 1. Use it as a guest, or sign in
+
+As a guest everything below works, and it is saved in this browser only. To share with a team, click **Sign in**, enter your email and click the link that arrives. If someone has invited you, accept the invitation; otherwise create an organization. Signed in, everything below is shared with the organization you are in, shown at the top left. Anything you saved as a guest can be imported from the banner that appears.
+
+### 2. Get a webhook URL
 
 In Discord, open the channel settings, go to **Integrations → Webhooks**, create one and copy its URL. It looks like `https://discord.com/api/webhooks/<id>/<token>`. Treat the token like a password: anyone with the URL can post to that channel.
 
-In the editor, click **Manage** next to the Webhook dropdown, give the webhook a nickname (for example "Announcements") and an optional description, and paste the URL. It is selected automatically. Add as many as you like and switch between them from the dropdown. If you would rather not save it, choose **Custom URL** and paste it into the **Webhook URL** box; a **Save…** button appears if you change your mind.
+Guests and organization admins add webhooks: in the editor, click **Manage** next to the Webhook dropdown, give the webhook a nickname (for example "Announcements") and an optional description, and paste the URL. It is selected automatically. Add as many as you like and switch between them from the dropdown. If you would rather not save it, choose **Custom URL** and paste it into the **Webhook URL** box; a **Save…** button appears if you change your mind.
 
 If you publish to more than one Discord server, add each one under **Servers** in the same dialog and assign webhooks to it. The dropdown then groups webhooks by server, and drafts are filed under the server they were published to. Adding the Discord server ID (Server Settings → Widget, or right-click the server with developer mode on) is optional but makes the "open in Discord" links resolve directly.
 
-### 2. Build the message
+### 3. Build the message
 
 If you post as the same brand each time, open **Authors** in the toolbar and save its name, link and avatar. The author dropdown above the webhook identity fields fills in username and avatar; the one in each embed's Author section fills in name, link and icon. The list shows each author's avatar, and the dropdown keeps showing which author is in use for as long as the fields still match it. Both places also offer **Save as author…** once you have typed something.
 
 Fill in the content and add embeds. The preview on the right updates as you type. Red text under a field means Discord would reject the message; the publish button stays disabled until everything is fixed.
 
-### 3. Publish
+### 4. Publish
 
 Click **Publish**. On success you get a toast with the message ID, a green banner with a link to the message, and a draft is created automatically if you did not already have one.
 
-### 4. Edit or delete later
+### 5. Edit or delete later
 
 Load the draft (or just stay on it), make your changes, and click **Update published**. Discord edits the original message in place. **Delete from Discord** removes it and clears the published state on the draft. Both actions require the same webhook that originally sent the message; if a different webhook is configured the buttons are disabled and the banner tells you why.
 
-### 5. Save and move drafts around
+### 6. Save and move drafts around
 
-**Save draft** stores the current message under a name. **Drafts** opens the list where you can load, rename, duplicate, export or delete them. **Export all** produces a single JSON file you can **Import** on another browser.
+**Save draft** stores the current message under a name, shared with your organization. **Drafts** opens the list where you can load, rename, duplicate, export or delete them. **Export all** produces a single JSON file you can **Import** into another organization.
 
 ### Tips
 
@@ -121,6 +143,20 @@ Load the draft (or just stay on it), make your changes, and click **Update publi
 - **Colours**: use the picker or type a hex value. Clear it for Discord's default grey bar.
 - **Images**: embed images and thumbnails need a direct, publicly reachable URL.
 - **Keyboard**: Esc closes any modal. Undo/redo shortcuts work when focus is not inside a text field, so native text undo keeps working too.
+
+## Organizations and roles
+
+Open **Organization** in the header to rename it, see members, invite people, change roles, create another organization or leave this one.
+
+| Role   | Can do                                                                                     |
+| ------ | ------------------------------------------------------------------------------------------ |
+| Owner  | Everything an admin can. Created the organization; cannot be removed or demoted.          |
+| Admin  | Add, edit and delete webhooks and servers. Invite and remove people, change member roles.  |
+| Member | Use the shared webhooks to publish. Add and edit authors and drafts. Leave the organization. |
+
+Invites are addressed to an email. The person joins with the invited role when they next sign in with that address. Admins can revoke an invite that hasn't been accepted.
+
+These permissions are enforced by the Firestore security rules (`firebase/firestore.rules`), not just hidden in the UI.
 
 ## Discord limits enforced
 
@@ -142,7 +178,10 @@ Discord also rejects usernames containing "clyde" or "discord", and the names "e
 
 ## Testing and CI
 
-End-to-end coverage lives in `cypress/e2e/` and runs against the dev server on port 5180. The suite stubs Discord's webhook endpoints with `cy.intercept`, so no real request leaves the machine and no webhook is needed. It covers:
+End-to-end coverage lives in `cypress/e2e/` and runs against the dev server on port 5180 and the Firebase emulators. `yarn test` starts the emulators itself. Each test wipes the emulators, signs in through the real email-link flow (reading the link from the auth emulator) and creates a fresh organization. The suite stubs Discord's webhook endpoints with `cy.intercept`, so no real request leaves the machine and no webhook is needed. It covers:
+
+- guest mode: using the editor signed out, local persistence, opening sign-in, importing guest data into an org after signing in
+- sign-in and organizations: creating an org, staying signed in, inviting a teammate who joins as a member, member restrictions, importing pre-sign-in browser data
 
 - editor behaviour: starter message, markdown rendering, adding/removing embeds and fields, limits and counters, undo/redo, clear, persistence across reloads
 - saved webhooks: add, edit, delete, select, auto-select on save, save a typed URL, persistence
@@ -153,15 +192,18 @@ End-to-end coverage lives in `cypress/e2e/` and runs against the dev server on p
 - drafts: save, update, save-as-new, load, rename, duplicate, delete, published state, import of export files and bare payloads
 
 ```bash
-yarn test        # headless, about 15 seconds
-yarn test:open   # interactive
+yarn test         # headless, about 90 seconds
+yarn test:open    # interactive (start `yarn emulators` first)
+yarn test:rules   # Firestore security rules
 ```
+
+The rules tests (`tests/rules/`, Node's built-in test runner with `@firebase/rules-unit-testing`) check that outsiders can't read anything, members can't change webhooks or roles, invites can't be used by the wrong or an unverified email, and nobody can take over an org.
 
 Three GitHub Actions workflows keep the repo healthy:
 
 | Workflow                    | Trigger                | What it does                                                                 |
 | --------------------------- | ---------------------- | ---------------------------------------------------------------------------- |
-| `ci.yml`                    | PRs and pushes to main | Type-check, production build, Cypress in Chrome. Uploads screenshots on failure. |
+| `ci.yml`                    | PRs and pushes to main | Type-check, production build, rules tests, Cypress against the emulators. Uploads screenshots on failure. |
 | `dependabot-automerge.yml`  | Dependabot PRs         | Enables auto-merge for minor and patch bumps once CI passes. Comments on majors. |
 | `deploy.yml`                | Pushes to main         | Builds and publishes to GitHub Pages.                                        |
 
@@ -187,30 +229,57 @@ VITE_BASE=/ yarn build            # custom domain or user site
 VITE_BASE=/my-repo/ yarn build    # different repo name
 ```
 
-Because the app is static and calls Discord directly from the browser, it also works from any static host: Netlify, Vercel, Cloudflare Pages, an S3 bucket, or a folder on a local machine.
+The built site is static (Firebase is called from the browser), so it also works from any static host: Netlify, Vercel, Cloudflare Pages, an S3 bucket. Add the host's domain to Firebase's authorized domains (below) or sign-in links will be rejected.
 
-## Storage and privacy
+## Firebase setup
 
-All state lives in `localStorage` under the `discord-publisher:` prefix:
+Production uses the Firebase project `discord-publisher-8a732`. Its web config is in `.env` and is committed on purpose: it identifies the project but grants no access, and it ends up in the built JavaScript anyway. Access is controlled by the security rules. Service-account keys or deploy tokens must never be committed.
 
-| Key        | Contents                                                        |
-| ---------- | --------------------------------------------------------------- |
-| `current`  | The message currently in the editor and which draft it came from |
-| `drafts`   | Saved drafts, including published message references            |
-| `settings` | Active webhook URL, which saved webhook it came from, thread ID  |
-| `webhooks` | Saved webhooks: nickname, description, URL and server           |
-| `servers`  | Servers: name and optional Discord server ID                    |
-| `authors`  | Reusable authors: name, URL and avatar URL                      |
+Only Authentication and Firestore are used, both on the free Spark plan. Firebase Storage and Cloud Functions are not used.
 
-Nothing is sent anywhere except to the Discord webhook you configure.
+One-time setup in the [Firebase console](https://console.firebase.google.com/project/discord-publisher-8a732):
 
-Webhook URLs contain a secret token. They are stored only in `settings` and `webhooks`. Drafts record the webhook **ID** and the published message ID, never the token, so exported draft files are safe to share. The cURL export does include the full webhook URL when one is set, so treat that output as sensitive.
+1. **Authentication → Sign-in method**: enable **Email/Password** and switch on **Email link (passwordless sign-in)**.
+2. **Authentication → Settings → Authorized domains**: add every domain the site is served from, e.g. `jackmcguire1.github.io`.
+3. **Firestore Database**: create the `(default)` database. Don't create any collections by hand; the app creates them.
+4. Deploy the rules and indexes: `npx firebase login`, then `yarn deploy:rules`. Or paste `firebase/firestore.rules` into Firestore → Rules and add the two single-field exemptions from `firebase/firestore.indexes.json` (`members.uid` and `invites.email`, ascending, collection group scope) under Firestore → Indexes. Keep the files in the repo as the source of truth.
+5. Optional: in Google Cloud Console → APIs & Services → Credentials, restrict the "Browser key" to your site's domains.
 
-Clearing your browser's site data removes everything. Export your drafts first if you want to keep them.
+Firestore layout:
+
+```
+orgs/{orgId}                  name, ownerUid
+├─ members/{uid}              uid, email, role (owner | admin | member)
+├─ invites/{email}            email, role, orgName, invitedBy
+├─ webhooks/{id}              name, description, url, serverId
+├─ servers/{id}               name, guildId
+├─ authors/{id}               name, url, avatarUrl
+└─ drafts/{id}                name, message, serverId, published
+```
+
+## Data and privacy
+
+As a **guest**, nothing leaves your browser except messages sent to Discord: webhooks, servers, authors and drafts live in `localStorage`. Clearing site data removes them, so export drafts you want to keep.
+
+When **signed in**, shared data (webhooks, servers, authors, drafts) is stored in Firestore under your organization, readable only by its members. Firestore encrypts it at rest.
+
+Webhook URLs contain a secret token. **Every member of an organization can read the full URLs of its saved webhooks**, because their browser sends messages to Discord directly. Only invite people you would trust with the webhooks themselves. Drafts record the webhook **ID** and the published message ID, never the token, so exported draft files are safe to share. The cURL export includes the full webhook URL, so treat that output as sensitive.
+
+Signed in, a few things still stay in this browser's `localStorage`, under the `discord-publisher:` prefix:
+
+| Key        | Contents                                                          |
+| ---------- | ----------------------------------------------------------------- |
+| `current`  | The message currently in the editor and which draft it came from  |
+| `settings` | Active webhook URL, which saved webhook it came from, thread ID   |
+| `org`      | Which organization you last worked in                             |
+
+Your sign-in session is also kept in `localStorage` by Firebase. Guest data lives under `drafts`, `webhooks`, `servers` and `authors`; after signing in, the app offers to import it into your organization (Organization dialog) and removes it from the browser afterwards.
+
+Messages go only to the Discord webhook you choose. Firebase receives your email address and your organization's data.
 
 ## How publishing works
 
-The app talks to Discord's webhook endpoints directly from the browser. Discord allows cross-origin requests to these endpoints, which is what makes a backend unnecessary.
+The app talks to Discord's webhook endpoints directly from the browser. Discord allows cross-origin requests to these endpoints, which is why no server-side code is needed.
 
 | Action  | Request                                                                 |
 | ------- | ----------------------------------------------------------------------- |
@@ -230,7 +299,12 @@ src/
 │  ├─ schema.ts        Zod schema, limits, validation, payload normalisation
 │  ├─ webhook.ts       URL parsing, payload building, send/edit/delete, cURL
 │  └─ markdown.js      Discord markdown → HTML for the preview
+├─ firebase.ts        Firebase init; connects to the emulators in development
 ├─ stores/
+│  ├─ session.ts       Sign-in, memberships, invites, active organization
+│  ├─ org.ts           Members and invites of the active org, admin actions
+│  ├─ orgCollection.ts Shared collection as a reactive array: Firestore when signed in, localStorage for guests
+│  ├─ legacy.ts        Import of guest localStorage data after sign-in
 │  ├─ message.ts       Current message, validation, undo/redo
 │  ├─ drafts.ts        Saved drafts and import/export
 │  ├─ settings.ts      Active webhook URL and thread ID
@@ -242,6 +316,7 @@ src/
 ├─ components/
 │  ├─ MessageEditor.vue, EmbedEditor.vue, EmbedFieldEditor.vue
 │  ├─ MessagePreview.vue
+│  ├─ SignIn.vue, OrgSetup.vue, OrgModal.vue
 │  ├─ PublishPanel.vue, Toolbar.vue
 │  ├─ JsonModal.vue, CurlModal.vue, DraftsModal.vue, WebhooksModal.vue, AuthorsModal.vue
 │  ├─ AuthorPicker.vue
@@ -251,14 +326,33 @@ src/
 │  └─ preview.css      Discord message styling for the preview
 ├─ App.vue
 └─ main.ts
+firebase/
+├─ firestore.rules       Security rules: who can read and write what
+└─ firestore.indexes.json
+tests/rules/             Security rules tests
 cypress/
-├─ e2e/              editor, publish, webhooks, servers, authors, export-import and drafts specs
-└─ support/e2e.ts    custom commands (visitClean, stubDiscord, setWebhook, …)
+├─ e2e/              guest, org, editor, publish, webhooks, servers, authors, export-import and drafts specs
+└─ support/e2e.ts    custom commands (visitClean, visitGuest, signIn, createOrg, stubDiscord, …)
 ```
 
-There is no router, no Pinia and no UI framework. Stores are plain module-level `ref`s, which is all a single-page editor needs.
+There is no router, no Pinia and no UI framework. Stores are plain module-level `ref`s; the shared ones are kept in sync with Firestore by live listeners.
 
 ## Troubleshooting
+
+**The sign-in link says the domain is not authorized (`auth/unauthorized-continue-uri`)**
+Add the site's domain under Authentication → Settings → Authorized domains in the Firebase console.
+
+**The sign-in link opens but asks for my email again**
+You opened it in a different browser from the one you requested it in. Enter the same email address and sign-in completes.
+
+**"Missing or insufficient permissions" (`permission-denied`)**
+The Firestore rules in the console don't match `firebase/firestore.rules`; deploy them again. As a member, you also can't change webhooks or servers; ask an admin.
+
+**`failed-precondition` / "requires an index" after signing in**
+The `members.uid` or `invites.email` index exemption is missing or still building. Run `yarn deploy:rules`, or follow the link in the error.
+
+**The emulators don't start**
+They need Java 21 or newer (`java -version`). `mise install` provides it.
 
 **"Not a Discord webhook URL"**
 The URL must match `https://discord.com/api/webhooks/<id>/<token>`. `discordapp.com`, `ptb.` and `canary.` hosts are accepted too. Query strings are stripped automatically.
@@ -275,5 +369,5 @@ The configured webhook does not match the one that published the message. Switch
 **Images show in the preview but not on Discord**
 The preview loads images from your browser, which may have cookies or network access that Discord's servers do not. Use a direct, public image URL.
 
-**I lost my drafts**
-Drafts live in the browser's `localStorage` for this site. Clearing site data, using a private window or switching browsers starts from empty. Use **Export all** regularly if the drafts matter.
+**My drafts and webhooks are missing**
+Signed in, check the organization selector in the header: they belong to one organization. Guest data is per browser; if you saved things as a guest, sign in from that same browser and import them.

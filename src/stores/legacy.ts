@@ -1,11 +1,12 @@
-import { ref, computed } from "vue";
+import { ref, computed, watch } from "vue";
 import { doc, writeBatch } from "firebase/firestore";
 import { db } from "../firebase";
 import { load } from "./persist";
-import { activeOrgId, canManage } from "./session";
+import { activeOrgId, canManage, user } from "./session";
 
-// Before Firebase, webhooks, servers, authors and drafts lived in this
-// browser's localStorage. This offers a one-time copy into the active org.
+// Guests (and everyone before Firebase) keep webhooks, servers, authors and
+// drafts in this browser's localStorage. Once signed in, this offers a copy
+// into the active org.
 // Ids are kept, so links between them (and the editor's current draft and
 // selected webhook) survive, and importing twice just overwrites.
 
@@ -24,6 +25,8 @@ function read(): Record<Key, { id: string }[]> {
 }
 
 const legacy = ref(read());
+// A guest may have added data since load; look again whenever someone signs in or out.
+watch(user, () => (legacy.value = read()));
 
 export const legacyCounts = computed(() => {
   const c = {} as Record<Key, number>;

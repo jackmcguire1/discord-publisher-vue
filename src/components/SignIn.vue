@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import Field from "./Field.vue";
-import { sendSignInLink } from "../stores/session";
+import { sendSignInLink, signInOpen } from "../stores/session";
 import { usingEmulators } from "../firebase";
 
 defineProps<{ error?: string | null }>();
@@ -30,7 +30,10 @@ async function send() {
   <div class="gate">
     <div class="card gate-card">
       <div class="card-body stack">
-        <h1 style="margin: 0">Discord Publisher</h1>
+        <div class="row row-between">
+          <h1 style="margin: 0">Discord Publisher</h1>
+          <button class="btn btn-ghost btn-sm" @click="signInOpen = false">Continue as guest</button>
+        </div>
         <div v-if="error" class="banner banner-error">{{ error }}</div>
 
         <template v-if="sentTo">
@@ -44,7 +47,10 @@ async function send() {
         </template>
 
         <form v-else class="stack" @submit.prevent="send">
-          <p class="muted small" style="margin: 0">Sign in with your email. We'll send you a link, no password needed.</p>
+          <p class="muted small" style="margin: 0">
+            Sign in with your email. We'll send you a link, no password needed. Signing in lets you create or join an
+            organization and share webhooks, authors and drafts with it. Anything you saved as a guest can be imported.
+          </p>
           <Field label="Email" :error="failure">
             <input v-model="email" type="email" class="input" placeholder="you@example.com" autocomplete="email" required />
           </Field>

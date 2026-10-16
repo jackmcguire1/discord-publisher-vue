@@ -52,8 +52,14 @@ export const activeOrgName = computed(() => (activeOrgId.value ? orgNames.value[
 export const activeRole = computed<Role | null>(
   () => memberships.value.find((m) => m.orgId === activeOrgId.value)?.role ?? null
 );
-/** Owners and admins manage webhooks, servers and membership. */
-export const canManage = computed(() => activeRole.value === "owner" || activeRole.value === "admin");
+/** Signed out: everything works from this browser's localStorage, with no org. */
+export const isGuest = computed(() => authReady.value && !user.value);
+/** Owners and admins manage webhooks, servers and membership; guests manage their own local data. */
+export const canManage = computed(
+  () => isGuest.value || activeRole.value === "owner" || activeRole.value === "admin"
+);
+/** Whether a guest has asked to see the sign-in screen. */
+export const signInOpen = ref(false);
 
 export function switchOrg(orgId: string) {
   storedOrg.value = orgId;
@@ -135,6 +141,7 @@ onAuthStateChanged(auth, (u) => {
   stopAll();
   user.value = u;
   authReady.value = true;
+  if (u) signInOpen.value = false;
   if (!u) return;
 
   stopUser.push(

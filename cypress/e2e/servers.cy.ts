@@ -50,6 +50,32 @@ describe("servers", () => {
     cy.contains(".field-label", "Webhook").should("contain.text", "Stat-Milestones");
   });
 
+  it("saves servers and webhooks to the org in Firestore", () => {
+    addServer("Stat-Milestones", GUILD);
+    addWebhook("Announcements", WEBHOOK);
+    cy.get(".toast-error").should("not.exist");
+
+    // Read the emulator directly (the "owner" bearer token bypasses rules) to prove the writes landed.
+    const docs = "http://127.0.0.1:8080/v1/projects/demo-discord-publisher/databases/(default)/documents";
+    const get = (path: string) => cy.request({ url: `${docs}/${path}`, headers: { Authorization: "Bearer owner" } });
+    get("orgs").then(({ body }) => {
+      const orgPath: string = body.documents[0].name.split("/documents/")[1];
+      get(`${orgPath}/servers`).its("body.documents").should("have.length", 1);
+      get(`${orgPath}/webhooks`).then(({ body: hooks }) => {
+        expect(hooks.documents).to.have.length(1);
+        expect(hooks.documents[0].fields.name.stringValue).to.eq("Announcements");
+        expect(hooks.documents[0].fields.serverId.stringValue).to.be.a("string").and.not.be.empty;
+      });
+    });
+
+    // And they come back after a reload, still grouped.
+    cy.get("body").type("{esc}");
+    cy.reload();
+    cy.get('select.webhook-select optgroup[label="Stat-Milestones"] option').should("have.text", "Announcements");
+    cy.contains("button", "Manage").click();
+    cy.get(".modal .server-item").should("contain.text", GUILD);
+  });
+
   it("files published drafts under the webhook's server and builds proper Discord links", () => {
     addServer("Stat-Milestones", GUILD);
     addWebhook("Announcements", WEBHOOK);
