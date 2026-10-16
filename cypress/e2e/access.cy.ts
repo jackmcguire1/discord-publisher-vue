@@ -58,6 +58,21 @@ describe("server access", () => {
     cy.get(".modal .webhook-item").should("have.length", 3);
     cy.get("body").type("{esc}");
 
+    // Messages filed under each server (a draft is filed under its webhook's server), plus one unassigned.
+    const saveAs = (name: string, hook: string) => {
+      cy.get("select.webhook-select").select(hook);
+      cy.window().then((w) => {
+        (w.prompt as unknown as { restore?: () => void }).restore?.();
+        cy.stub(w, "prompt").returns(name);
+      });
+      cy.contains("button", "Save draft").click();
+      cy.toast("Draft saved");
+      cy.contains("button", "New message").click();
+    };
+    saveAs("Msg A", "Hook A");
+    saveAs("Msg B", "Hook B");
+    saveAs("Msg loose", "Custom URL");
+
     cy.accountMenu("Members");
     cy.get(".invite-email").type(TEAMMATE, { delay: 0 });
     cy.get(".invite-servers .access-all").uncheck();
@@ -75,6 +90,12 @@ describe("server access", () => {
     cy.get(".modal .server-item").should("have.length", 1).and("contain.text", "Server A");
     cy.get(".toast-error").should("not.exist");
     cy.get("body").type("{esc}");
+
+    // Messages: their server's and unassigned ones, never Server B's.
+    cy.contains(".nav-link", "Messages").click();
+    cy.get(".messages-panel .draft-item").should("have.length", 2);
+    cy.get(".messages-panel").should("contain.text", "Msg A").and("contain.text", "Msg loose").and("not.contain.text", "Msg B");
+    cy.get(".toast-error").should("not.exist");
     cy.accountMenu("Sign out");
 
     // The owner widens access back to all servers.

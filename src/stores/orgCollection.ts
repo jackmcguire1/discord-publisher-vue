@@ -34,29 +34,44 @@ export function orgCollection<T extends { id: string }>(
     /**
      * Filters for the Firestore listener, re-run when they change; null loads
      * nothing. For collections the rules only partly expose (rules aren't
-     * filters, so the query must ask for exactly what's allowed).
+     * filters, so the query must ask for exactly what's allowed). Return a
+     * list of filter sets to run several queries and merge their results
+     * (the rules can't verify some single queries, e.g. `in [ids..., null]`).
      */
-    constraints?: () => QueryConstraint[] | null;
+    constraints?: () => QueryConstraint[] | QueryConstraint[][] | null;
     /** Plain value the constraints depend on; the listener restarts only when it changes. */
     constraintsKey?: () => string;
   } = {}
 ): OrgCollection<T> {
   const items = ref<T[]>([]) as Ref<T[]>;
-  let stop: (() => void) | null = null;
+  let stops: (() => void)[] = [];
   const guest = () => authReady.value && !user.value;
 
   watch(
     [activeOrgId, guest, () => opts.constraintsKey?.() ?? ""],
     ([orgId, isGuest]) => {
-      stop?.();
-      stop = null;
+      stops.forEach((f) => f());
+      stops = [];
       items.value = isGuest ? load<T[]>(name, []) : [];
       const constraints = opts.constraints ? opts.constraints() : [];
       if (!orgId || constraints === null) return;
-      stop = onSnapshot(
-        query(collection(db, "orgs", orgId, name), ...constraints),
-        (snap) => (items.value = snap.docs.map((d) => ({ ...d.data(), id: d.id }) as T)),
-        (e) => toast("error", `Could not load ${name}`, e.message)
+      const sets = (Array.isArray(constraints[0]) ? constraints : [constraints]) as QueryConstraint[][];
+      // One listener per filter set; each keeps its own results and the union is published.
+      const results: T[][] = sets.map(() => []);
+      const publish = () => {
+        const byId = new Map<string, T>();
+        for (const list of results) for (const item of list) byId.set(item.id, item);
+        items.value = [...byId.values()];
+      };
+      stops = sets.map((set, i) =>
+        onSnapshot(
+          query(collection(db, "orgs", orgId, name), ...set),
+          (snap) => {
+            results[i] = snap.docs.map((d) => ({ ...d.data(), id: d.id }) as T);
+            publish();
+          },
+          (e) => toast("error", `Could not load ${name}`, e.message)
+        )
       );
     },
     { immediate: true }

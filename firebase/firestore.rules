@@ -21,6 +21,8 @@ rules_version = '2';
 // list of server ids. A member limited to a list can only read webhooks filed
 // under those servers (so their tokens never reach anyone else); webhooks not
 // filed under a server need access to all servers. Owners and admins see all.
+// Messages (drafts) follow the same split, except unassigned ones, which every
+// member can see; their revisions follow their message.
 //
 // Everything is scoped to an org. Users join by creating an org (becoming its
 // owner) or by accepting an invite addressed to their verified email.
@@ -106,6 +108,10 @@ service cloud.firestore {
 
     function canSeeServer(orgId, serverId) {
       return allServers(orgId) || (serverId != null && serverId in get(memberPath(orgId)).data.servers);
+    }
+
+    function canSeeMessage(orgId, serverId) {
+      return serverId == null || canSeeServer(orgId, serverId);
     }
 
     function validServers(data) {
@@ -257,15 +263,24 @@ service cloud.firestore {
           return shortString(request.resource.data.name, 200) && request.resource.data.message is map;
         }
 
-        allow read: if isMember(orgId);
+        // Limited members list with two queries: where("serverId", "in", theirServers)
+        // and where("serverId", "==", null). serverId is read directly, never with
+        // .get(…, null): in list queries a default can stand in for the real
+        // value and would wrongly pass "unassigned" for every message. Members
+        // with all servers are checked first, so messages without the field
+        // (from before servers existed) stay readable to them.
+        allow read: if isMember(orgId) && (allServers(orgId) || canSeeMessage(orgId, resource.data.serverId));
 
         allow create: if isMember(orgId) && validMessage()
+          && (allServers(orgId) || canSeeMessage(orgId, request.resource.data.serverId))
           && (field(request.resource.data, 'published') == null || canPublish(orgId))
           && (field(request.resource.data, 'deleted') == null || canDelete(orgId));
 
         // Publishing or updating on Discord changes `published`; deleting from
         // Discord clears it and sets `deleted`.
         allow update: if isMember(orgId) && validMessage()
+          && (allServers(orgId) || canSeeMessage(orgId, resource.data.serverId))
+          && (allServers(orgId) || canSeeMessage(orgId, request.resource.data.serverId))
           && (field(request.resource.data, 'deleted') == field(resource.data, 'deleted') || canDelete(orgId))
           && (field(request.resource.data, 'published') == field(resource.data, 'published')
             || (field(request.resource.data, 'published') == null && canDelete(orgId))
@@ -273,6 +288,7 @@ service cloud.firestore {
 
         // Plain drafts can be removed by any member; published or deleted messages are history.
         allow delete: if isMember(orgId)
+          && (allServers(orgId) || canSeeMessage(orgId, resource.data.serverId))
           && ((field(resource.data, 'published') == null && field(resource.data, 'deleted') == null) || canDelete(orgId));
 
         // Snapshots of the message. Anyone in the org records "saved" ones;
@@ -285,8 +301,13 @@ service cloud.firestore {
             return /databases/$(database)/documents/orgs/$(orgId)/drafts/$(id);
           }
 
-          allow read: if isMember(orgId);
-          allow create: if isMember(orgId)
+          // Versions are visible to whoever can see their message.
+          function messageVisible() {
+            return !exists(draftDoc()) || canSeeMessage(orgId, get(draftDoc()).data.get('serverId', null));
+          }
+
+          allow read: if isMember(orgId) && messageVisible();
+          allow create: if isMember(orgId) && messageVisible()
             && request.resource.data.keys().hasOnly(['number', 'kind', 'message', 'createdAt', 'createdBy', 'note'])
             && request.resource.data.number is int
             && request.resource.data.message is map
@@ -296,14 +317,14 @@ service cloud.firestore {
               || (request.resource.data.kind in ['published', 'updated'] && canPublish(orgId)));
           // "Update draft" saves over the message's current version, if it's a
           // saved one past v1. Everything else about a version is fixed.
-          allow update: if isMember(orgId)
+          allow update: if isMember(orgId) && messageVisible()
             && resource.data.kind == 'saved'
             && resource.data.number > 1
             && get(draftDoc()).data.get('revisionId', null) == revId
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['message', 'updatedAt', 'updatedBy'])
             && request.resource.data.message is map
             && request.resource.data.get('updatedBy', myEmail()) == myEmail();
-          allow delete: if isMember(orgId) && (
+          allow delete: if isMember(orgId) && messageVisible() && (
             (resource.data.kind == 'saved' && resource.data.number != 1)
             || canDelete(orgId)
             || !exists(draftDoc())

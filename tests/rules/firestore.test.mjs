@@ -462,3 +462,59 @@ describe("server-scoped access", () => {
     await assertSucceeds(setDoc(doc(as("invitee"), "orgs", ORG, "members", "invitee"), { ...member, servers: ["A"] }));
   });
 });
+
+describe("server-scoped messages", () => {
+  const msg = (serverId, extra = {}) => ({ name: "M", createdAt: now, updatedAt: now, serverId, message: { content: "hi", embeds: [] }, ...extra });
+  const limited = () => env.authenticatedContext("limited", { email: "limited@example.com", email_verified: true }).firestore();
+
+  async function seedMessages() {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, "orgs", ORG, "members", "limited"), { uid: "limited", email: "limited@example.com", role: "member", joinedAt: now, servers: ["A"] });
+      await setDoc(doc(db, "orgs", ORG, "drafts", "inA"), msg("A"));
+      await setDoc(doc(db, "orgs", ORG, "drafts", "inB"), msg("B"));
+      await setDoc(doc(db, "orgs", ORG, "drafts", "loose"), msg(null));
+      await setDoc(doc(db, "orgs", ORG, "drafts", "inB", "revisions", "r1"), { number: 1, kind: "saved", message: {}, createdAt: now, createdBy: "owner@example.com" });
+    });
+  }
+
+  it("a limited member sees messages of their servers and unassigned ones, not others", async () => {
+    await seedMessages();
+    await assertSucceeds(getDoc(doc(limited(), "orgs", ORG, "drafts", "inA")));
+    await assertSucceeds(getDoc(doc(limited(), "orgs", ORG, "drafts", "loose")));
+    await assertFails(getDoc(doc(limited(), "orgs", ORG, "drafts", "inB")));
+    await assertFails(getDocs(collection(limited(), "orgs", ORG, "drafts", "inB", "revisions")));
+  });
+
+  it("their filtered list queries are allowed (servers, and unassigned), a broader one isn't", async () => {
+    await seedMessages();
+    const drafts = collection(limited(), "orgs", ORG, "drafts");
+    // The app runs these two and merges them; a single `in ["A", null]` can't be verified by the rules.
+    const mine = await assertSucceeds(getDocs(query(drafts, where("serverId", "in", ["A"]))));
+    const unassigned = await assertSucceeds(getDocs(query(drafts, where("serverId", "==", null))));
+    if (mine.size + unassigned.size !== 2) throw new Error(`expected 2 messages, got ${mine.size + unassigned.size}`);
+    // Regression: an unfiltered query must not slip through as "unassigned".
+    await assertFails(getDocs(drafts));
+    await assertFails(getDocs(query(drafts, where("serverId", "in", ["A", "B"]))));
+  });
+
+  it("a limited member can't file a message under, or move one to, another server", async () => {
+    await seedMessages();
+    await assertSucceeds(setDoc(doc(limited(), "orgs", ORG, "drafts", "new"), msg("A")));
+    await assertFails(setDoc(doc(limited(), "orgs", ORG, "drafts", "new2"), msg("B")));
+    await assertFails(updateDoc(doc(limited(), "orgs", ORG, "drafts", "inA"), { serverId: "B" }));
+    await assertFails(updateDoc(doc(limited(), "orgs", ORG, "drafts", "inB"), { name: "x" }));
+    await assertFails(deleteDoc(doc(limited(), "orgs", ORG, "drafts", "inB")));
+  });
+
+  it("members with all-server access still see every message, even ones without a serverId", async () => {
+    await seedMessages();
+    await env.withSecurityRulesDisabled((ctx) =>
+      setDoc(doc(ctx.firestore(), "orgs", ORG, "drafts", "old"), { name: "Old", createdAt: now, updatedAt: now, message: { content: "", embeds: [] } })
+    );
+    await assertSucceeds(getDocs(collection(as("member"), "orgs", ORG, "drafts")));
+    await assertSucceeds(updateDoc(doc(as("member"), "orgs", ORG, "drafts", "old"), { name: "Renamed" }));
+    await assertSucceeds(getDoc(doc(as("admin"), "orgs", ORG, "drafts", "old")));
+    await assertFails(getDoc(doc(limited(), "orgs", ORG, "drafts", "old")));
+  });
+});

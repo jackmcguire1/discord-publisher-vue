@@ -1,6 +1,7 @@
 import { computed } from "vue";
+import { where } from "firebase/firestore";
 import { orgCollection } from "./orgCollection";
-import { myEmail } from "./session";
+import { myEmail, serverAccess } from "./session";
 import { addRevision, overwriteRevision, deleteRevisions, type RevisionKind } from "./revisions";
 import type { Message } from "../discord/schema";
 import { parseIncomingMessage } from "../discord/schema";
@@ -57,7 +58,18 @@ export interface DraftsFile {
   servers?: { id: string; name: string; guildId: string }[];
 }
 
-const store = orgCollection<Draft>("drafts");
+// Members limited to some servers see messages filed under those servers plus
+// unassigned ones. The rules can't verify one `in [...servers, null]` query,
+// so that's two listeners merged.
+const store = orgCollection<Draft>("drafts", {
+  constraints: () => {
+    const access = serverAccess.value;
+    if (access === null) return [];
+    const unassigned = [where("serverId", "==", null)];
+    return access.length ? [[where("serverId", "in", access)], unassigned] : [unassigned];
+  },
+  constraintsKey: () => JSON.stringify(serverAccess.value),
+});
 const state = store.items;
 
 export const drafts = computed(() =>
