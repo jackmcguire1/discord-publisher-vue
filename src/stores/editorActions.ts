@@ -1,7 +1,8 @@
 import { ref } from "vue";
 import { message, currentDraftId, replaceMessage, isDirty, markClean } from "./message";
-import { getDraft, createDraft, updateDraftMessage, statusOf } from "./drafts";
-import { selectedWebhookServerId } from "./webhooks";
+import { getDraft, createDraft, updateDraftMessage, statusOf, type Draft } from "./drafts";
+import { selectedWebhookServerId, getWebhook, webhookByDiscordId, selectWebhook } from "./webhooks";
+import { settings } from "./settings";
 import { emptyMessage } from "../discord/schema";
 import { toast } from "./toasts";
 
@@ -30,6 +31,10 @@ export function saveAsNewDraft(): boolean {
 export function saveDraft(): boolean {
   const id = editableDraftId();
   if (!id) return saveAsNewDraft();
+  if (!isDirty.value) {
+    toast("info", "No changes to save", getDraft(id)?.name);
+    return true;
+  }
   updateDraftMessage(id, message.value);
   markClean();
   toast("success", "Draft updated", getDraft(id)?.name);
@@ -45,6 +50,22 @@ export function startNewMessage() {
   const { username, avatar_url } = message.value;
   replaceMessage({ ...emptyMessage(), username, avatar_url }, null);
   toast("info", "New message", "Started a blank message.");
+}
+
+/** Point the publish panel at the webhook (and thread) a published message went through, if it's saved here. */
+export function selectWebhookFor(d: Draft) {
+  const info = d.published;
+  if (!info) return;
+  const hook = getWebhook(info.savedWebhookId) ?? webhookByDiscordId(info.webhookId);
+  if (hook) selectWebhook(hook.id);
+  settings.value.threadId = info.threadId ?? "";
+}
+
+/** The message whose revision history is open, if any. */
+export const historyFor = ref<string | null>(null);
+
+export function openHistory(draftId: string) {
+  historyFor.value = draftId;
 }
 
 /** Set while the "unsaved changes" dialog is open; `after` runs once a new message has started. */

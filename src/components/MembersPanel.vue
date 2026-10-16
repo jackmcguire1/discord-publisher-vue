@@ -1,7 +1,17 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { user, activeOrgName, canManage, inviteLink } from "../stores/session";
-import { members, pendingInvites, inviteMember, revokeInvite, setMemberRole, setMemberPermissions, removeMember, type Member } from "../stores/org";
+import { user, activeOrgName, activeRole, canManage, inviteLink } from "../stores/session";
+import {
+  members,
+  pendingInvites,
+  inviteMember,
+  revokeInvite,
+  setMemberRole,
+  setMemberPermissions,
+  removeMember,
+  transferOwnership,
+  type Member,
+} from "../stores/org";
 import type { Permissions } from "../stores/session";
 import { toast } from "../stores/toasts";
 
@@ -64,6 +74,11 @@ function permissionSummary(p: { role: string; canPublish?: boolean; canDelete?: 
   return can.length ? `can ${can.join(" and ")}` : "drafts only";
 }
 
+function makeOwner(m: Member) {
+  if (!confirm(`Make ${m.email} the owner of ${activeOrgName.value}? You'll become an admin, and only they will be able to hand ownership on.`)) return;
+  attempt(() => transferOwnership(m.uid), `${m.email} is now the owner`, "Could not transfer ownership");
+}
+
 function remove(m: Member) {
   if (!confirm(`Remove ${m.email} from ${activeOrgName.value}?`)) return;
   attempt(() => removeMember(m.uid), "Member removed", "Could not remove member");
@@ -106,6 +121,12 @@ function remove(m: Member) {
               <option value="admin">admin</option>
             </select>
             <span v-else class="tag member-role">{{ m.role }}</span>
+            <button
+              v-if="activeRole === 'owner' && m.uid !== user?.uid"
+              class="btn btn-sm btn-ghost make-owner"
+              title="Transfer ownership to this member"
+              @click="makeOwner(m)"
+            >Make owner</button>
             <button v-if="canManage && m.role !== 'owner' && m.uid !== user?.uid" class="btn btn-sm btn-danger" @click="remove(m)">✕</button>
           </div>
         </div>

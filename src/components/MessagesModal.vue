@@ -7,6 +7,6 @@ const emit = defineEmits<{ close: [] }>();
 
 <template>
   <Modal title="Messages" @close="emit('close')">
-    <MessagesPanel @loaded="emit('close')" />
+    <MessagesPanel @loaded="emit('close')" @handoff="emit('close')" />
   </Modal>
 </template>

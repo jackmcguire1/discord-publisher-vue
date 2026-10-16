@@ -411,3 +411,5 @@ select.nav-org option { background: var(--bg-1); color: var(--text); }
 .page-inner { max-width: 1000px; margin: 0 auto; }
 .page-inner > * + * { margin-top: 16px; }
 .page .card-body { border-top: none; padding: 20px; }
+
+.revision-preview { margin-top: 10px; padding: 10px; border-radius: var(--radius); background: var(--bg-2); border: 1px solid var(--border); }

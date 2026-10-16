@@ -32,6 +32,11 @@ export function markClean() {
   cleanSnapshot.value = JSON.stringify(message.value);
 }
 
+/** Treat `saved` as the last saved state, so the editor's differences from it show as unsaved changes. */
+export function markCleanAs(saved: Message) {
+  cleanSnapshot.value = JSON.stringify(saved);
+}
+
 watch(
   [message, currentDraftId, cleanSnapshot],
   () => save("current", { message: message.value, draftId: currentDraftId.value, clean: cleanSnapshot.value }),

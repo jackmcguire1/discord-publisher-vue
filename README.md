@@ -75,6 +75,7 @@ Live site: **https://jackmcguire1.github.io/discord-publisher-vue/**
 - Every publish is recorded with who published it, when, through which webhook, and who last updated it. Deleting from Discord keeps the message as history (marked deleted) instead of losing it; publishing it again creates a new message.
 - **Load** on a published message selects the webhook it went through and pulls its current content from Discord, ready to update or delete.
 - **+ New message** (editor header, Messages page) starts a blank message, keeping your webhook identity and selected webhook. If the editor has unsaved changes it asks first: save as a draft, discard, or cancel. The header shows the message you're editing and whether it has unsaved changes.
+- **Versions**: every save, publish and Discord update is kept as a numbered revision (v1, v2, …) with who made it and when. **History** (in the Messages list, or the `vN · History` button in the editor header) lists them with a preview of each; **Restore** opens an old version in the editor as unsaved changes, so saving or updating records it as a new revision and nothing is lost. Duplicates start their own history.
 - Save, rename, duplicate, delete, export and import drafts.
 - Publishing automatically creates a draft if you have not saved one, so every send is tracked.
 - Drafts record when they were last updated and when and where they were published.
@@ -151,11 +152,11 @@ Load the draft (or just stay on it), make your changes, and click **Update publi
 
 ## Organizations and roles
 
-**Settings → Organizations** lists every organization you belong to and any invitations waiting for you. Switch between them there or from the selector next to your avatar, create a new one (you're switched into it), rename the current one, leave it, or, as an admin, delete it. Deleting removes the organization and all its webhooks, servers, authors, drafts, members and invites for everyone; you confirm by typing its name. Messages already posted on Discord are not touched. **Settings → Members** handles members, roles and invites.
+**Settings → Organizations** lists every organization you belong to and any invitations waiting for you. Switch between them there or from the selector next to your avatar, create a new one (you're switched into it), rename the current one, leave it, or, as an admin, delete it. Deleting removes the organization and all its webhooks, servers, authors, drafts, members and invites for everyone; you confirm by typing its name. Messages already posted on Discord are not touched. **Settings → Members** handles members, roles and invites. The owner can **Make owner** on any member to hand the organization over: that member becomes the owner and the previous owner becomes an admin (who can then leave if they want).
 
 | Role   | Can do                                                                                     |
 | ------ | ------------------------------------------------------------------------------------------ |
-| Owner  | Everything an admin can. Created the organization; cannot be removed, demoted or leave.   |
+| Owner  | Everything an admin can, plus handing ownership to someone else. There is exactly one; the owner can't be removed or leave without first transferring ownership. |
 | Admin  | Add, edit and delete webhooks and servers. Invite and remove people, change member roles. Delete the organization. |
 | Member | Add and edit authors and drafts, and leave the organization. Plus, per member: **Publish & edit** (publish and update messages on Discord, on by default) and **Delete** (delete messages from Discord and remove published ones from the history, off by default). |
 
@@ -259,7 +260,8 @@ orgs/{orgId}                  name, ownerUid
 ├─ webhooks/{id}              name, description, url, serverId
 ├─ servers/{id}               name, guildId
 ├─ authors/{id}               name, url, avatarUrl
-└─ drafts/{id}                name, message, serverId, published
+└─ drafts/{id}                name, message, serverId, published, deleted, revision
+   └─ revisions/{id}          number, kind (saved | published | updated), message, createdAt, createdBy
 ```
 
 ## Data and privacy

@@ -8,6 +8,7 @@ rules_version = '2';
 //   orgs/{orgId}/webhooks/{id}      admins write, members read (holds the webhook token)
 //   orgs/{orgId}/authors/{id}       members read/write
 //   orgs/{orgId}/drafts/{id}        messages: drafts, published (`published`) and deleted from Discord (`deleted`)
+//     .../revisions/{revId}         { number, kind: saved|published|updated, message, createdAt, createdBy, note? }, immutable
 //
 // Permissions: owners and admins can do everything. Members carry two flags:
 // canPublish (default true) to publish and update messages on Discord, and
@@ -18,6 +19,10 @@ rules_version = '2';
 //
 // Everything is scoped to an org. Users join by creating an org (becoming its
 // owner) or by accepting an invite addressed to their verified email.
+//
+// Transferring ownership: the owner, in one batch, sets the org's ownerUid to
+// another member, makes that member `owner` and makes themselves `admin`. The
+// rules only accept all three together, so there is always exactly one owner.
 //
 // Deleting an org: Firestore doesn't cascade, so an admin first sets
 // `deleting: true`, removes the subcollections (other members included), then
@@ -82,6 +87,14 @@ service cloud.firestore {
       return /databases/$(database)/documents/orgs/$(orgId)/invites/$(myEmail());
     }
 
+    function isOwner(orgId) {
+      return isMember(orgId) && role(orgId) == 'owner';
+    }
+
+    function memberAfter(orgId, uid) {
+      return getAfter(/databases/$(database)/documents/orgs/$(orgId)/members/$(uid)).data;
+    }
+
     function isDeleting(orgId) {
       return exists(orgPath(orgId)) && get(orgPath(orgId)).data.get('deleting', false) == true;
     }
@@ -114,7 +127,14 @@ service cloud.firestore {
           && shortString(request.resource.data.name, 100)
           && request.resource.data.name.size() > 0)
         || (onlyChanges(['deleting']) && request.resource.data.deleting == true)
-      );
+      )
+      // Ownership transfer, with both membership changes in the same batch.
+      || (isOwner(orgId)
+        && onlyChanges(['ownerUid'])
+        && request.resource.data.ownerUid != request.auth.uid
+        && exists(/databases/$(database)/documents/orgs/$(orgId)/members/$(request.resource.data.ownerUid))
+        && memberAfter(orgId, request.resource.data.ownerUid).role == 'owner'
+        && memberAfter(orgId, request.auth.uid).role == 'admin');
       allow delete: if isAdmin(orgId) && resource.data.get('deleting', false) == true;
 
       match /members/{uid} {
@@ -141,12 +161,26 @@ service cloud.firestore {
 
         // Admins can switch others between admin and member and set their
         // permissions; the owner's role is fixed.
-        allow update: if isAdmin(orgId)
+        allow update: if (isAdmin(orgId)
           && uid != request.auth.uid
           && resource.data.role != 'owner'
           && onlyChanges(['role', 'canPublish', 'canDelete'])
           && request.resource.data.role in ['admin', 'member']
-          && validPerms(request.resource.data);
+          && validPerms(request.resource.data))
+          // Ownership transfer: the owner promotes another member...
+          || (isOwner(orgId)
+            && uid != request.auth.uid
+            && onlyChanges(['role'])
+            && request.resource.data.role == 'owner'
+            && getAfter(orgPath(orgId)).data.ownerUid == uid
+            && memberAfter(orgId, request.auth.uid).role == 'admin')
+          // ...and steps down to admin in the same batch.
+          || (isOwner(orgId)
+            && uid == request.auth.uid
+            && onlyChanges(['role'])
+            && request.resource.data.role == 'admin'
+            && getAfter(orgPath(orgId)).data.ownerUid != uid
+            && memberAfter(orgId, getAfter(orgPath(orgId)).data.ownerUid).role == 'owner');
 
         // Admins remove others; anyone but the owner can leave. While an org is
         // being deleted admins may remove anyone, and once the org doc is gone
@@ -219,6 +253,31 @@ service cloud.firestore {
         // Plain drafts can be removed by any member; published or deleted messages are history.
         allow delete: if isMember(orgId)
           && ((field(resource.data, 'published') == null && field(resource.data, 'deleted') == null) || canDelete(orgId));
+
+        // Snapshots of the message. Anyone in the org records "saved" ones;
+        // "published"/"updated" ones need canPublish. They are never edited, and
+        // are removed along with their message (same permission as the message).
+        match /revisions/{revId} {
+          function draftDoc() {
+            return /databases/$(database)/documents/orgs/$(orgId)/drafts/$(id);
+          }
+
+          allow read: if isMember(orgId);
+          allow create: if isMember(orgId)
+            && request.resource.data.keys().hasOnly(['number', 'kind', 'message', 'createdAt', 'createdBy', 'note'])
+            && request.resource.data.number is int
+            && request.resource.data.message is map
+            && request.resource.data.createdAt is string
+            && request.resource.data.get('createdBy', myEmail()) == myEmail()
+            && (request.resource.data.kind == 'saved'
+              || (request.resource.data.kind in ['published', 'updated'] && canPublish(orgId)));
+          allow update: if false;
+          allow delete: if isMember(orgId) && (
+            canDelete(orgId)
+            || !exists(draftDoc())
+            || (get(draftDoc()).data.get('published', null) == null && get(draftDoc()).data.get('deleted', null) == null)
+          );
+        }
       }
     }
   }

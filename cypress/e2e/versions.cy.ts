@@ -1,0 +1,101 @@
+import { WEBHOOK } from "../support/e2e";
+
+const FS = "http://127.0.0.1:8080/v1/projects/demo-discord-publisher/databases/(default)/documents";
+const fsGet = (path: string) => cy.request({ url: `${FS}/${path}`, headers: { Authorization: "Bearer owner" } });
+/** Revision docs of the only message in the org. */
+function revisionDocs() {
+  return fsGet("orgs").then(({ body }) => {
+    const org = body.documents[0].name.split("/documents/")[1];
+    return fsGet(`${org}/drafts`).then(({ body: drafts }) => {
+      const draft = drafts.documents[0].name.split("/documents/")[1];
+      return fsGet(`${draft}/revisions`).then(({ body: revs }) => revs.documents ?? []);
+    });
+  });
+}
+
+function content() {
+  return cy.get("textarea").first();
+}
+
+describe("message versions", () => {
+  it("each save is a revision; old ones can be previewed and restored", () => {
+    cy.visitClean();
+    cy.window().then((w) => cy.stub(w, "prompt").returns("Notes"));
+    content().type("First version", { delay: 0 });
+    cy.contains("button", "Save draft").click();
+    cy.get(".editor-history").should("contain.text", "v1");
+
+    content().clear().type("Second version", { delay: 0 });
+    cy.contains("button", "Update draft").click();
+    cy.get(".editor-history").should("contain.text", "v2");
+
+    // Saving without changes doesn't add an empty revision.
+    cy.contains("button", "Update draft").click();
+    cy.toast("No changes to save");
+    cy.get(".editor-history").should("contain.text", "v2");
+
+    cy.get(".editor-history").click();
+    cy.get(".revision-item").should("have.length", 2);
+    cy.get('.revision-item[data-revision="2"]').should("contain.text", "latest").and("contain.text", "Second version");
+    cy.get('.revision-item[data-revision="1"]').find(".revision-preview-toggle").click();
+    cy.get('.revision-item[data-revision="1"] .revision-preview').should("contain.text", "First version");
+    cy.get('.revision-item[data-revision="1"]').find(".revision-restore").click();
+    cy.toast("Restored v1");
+    content().should("have.value", "First version");
+    cy.get(".editing-name").should("contain.text", "unsaved changes");
+
+    cy.contains("button", "Update draft").click();
+    cy.get(".editor-history").should("contain.text", "v3").click();
+    cy.get(".revision-item").should("have.length", 3);
+    revisionDocs().should("have.length", 3);
+  });
+
+  it("publishing and updating on Discord are revisions too", () => {
+    cy.visitClean();
+    cy.stubDiscord();
+    cy.setWebhook();
+    cy.contains("button", "Publish").click();
+    cy.wait("@send");
+    cy.get(".editor-history").should("contain.text", "v1"); // one revision, not a save plus a publish
+    content().type("Edited", { delay: 0 });
+    cy.contains("button", "Update published").click();
+    cy.wait("@edit");
+    cy.get(".editor-history").should("contain.text", "v2").click();
+    cy.get('.revision-item[data-revision="1"]').should("contain.text", "Published to Discord");
+    cy.get('.revision-item[data-revision="2"]').should("contain.text", "Updated on Discord");
+    revisionDocs().should("have.length", 2);
+  });
+
+  it("opens from the Messages list, and a duplicate starts its own history", () => {
+    cy.visitClean();
+    cy.window().then((w) => cy.stub(w, "prompt").returns("Original"));
+    cy.contains("button", "Save draft").click();
+    cy.contains(".nav-link", "Messages").click();
+    cy.get(".draft-item .revision-tag").should("have.text", "v1");
+    cy.contains(".draft-item", "Original").contains("button", "Duplicate").click();
+    cy.contains(".draft-item", "(copy)").contains("button", "History").click();
+    cy.get(".revision-item").should("have.length", 1).and("contain.text", 'Duplicated from "Original"');
+  });
+
+  it("guests keep versions locally, and they come along on import", () => {
+    cy.visitGuest();
+    cy.window().then((w) => cy.stub(w, "prompt").returns("Guest notes"));
+    content().type("one", { delay: 0 });
+    cy.contains("button", "Save draft").click();
+    content().type(" two", { delay: 0 });
+    cy.contains("button", "Update draft").click();
+    cy.get(".editor-history").should("contain.text", "v2").click();
+    cy.get(".revision-item").should("have.length", 2);
+    cy.get("body").type("{esc}");
+
+    cy.signIn();
+    cy.createOrg();
+    cy.get(".legacy-banner").contains("Import…").click();
+    cy.contains(".settings button", "Import into Test Org").click();
+    cy.toast("Imported 1 item");
+    revisionDocs().should("have.length", 2);
+    cy.contains(".nav-link", "Messages").click();
+    cy.contains(".draft-item", "Guest notes").contains("button", "History").click();
+    cy.get(".revision-item").should("have.length", 2);
+  });
+});

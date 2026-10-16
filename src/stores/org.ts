@@ -83,6 +83,17 @@ export function setMemberPermissions(uid: string, patch: Partial<Permissions>) {
   return updateDoc(doc(db, "orgs", orgId(), "members", uid), patch);
 }
 
+/** Make another member the owner; the current owner becomes an admin. One batch, as the rules require. */
+export function transferOwnership(uid: string) {
+  const id = orgId();
+  const me = user.value!.uid;
+  const batch = writeBatch(db);
+  batch.update(doc(db, "orgs", id), { ownerUid: uid });
+  batch.update(doc(db, "orgs", id, "members", uid), { role: "owner" });
+  batch.update(doc(db, "orgs", id, "members", me), { role: "admin" });
+  return batch.commit();
+}
+
 export function removeMember(uid: string) {
   return deleteDoc(doc(db, "orgs", orgId(), "members", uid));
 }
@@ -104,6 +115,10 @@ export async function deleteOrg() {
   await updateDoc(org, { deleting: true });
 
   const refs: DocumentReference[] = [];
+  // Revisions live under each message and aren't removed with it.
+  for (const draft of (await getDocs(collection(org, "drafts"))).docs) {
+    refs.push(...(await getDocs(collection(draft.ref, "revisions"))).docs.map((d) => d.ref));
+  }
   for (const name of ["drafts", "authors", "webhooks", "servers", "invites", "members"]) {
     const snap = await getDocs(collection(org, name));
     refs.push(...snap.docs.map((d) => d.ref).filter((r) => !(name === "members" && r.id === me)));

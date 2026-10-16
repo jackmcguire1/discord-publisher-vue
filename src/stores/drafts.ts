@@ -1,6 +1,7 @@
 import { computed } from "vue";
 import { orgCollection } from "./orgCollection";
 import { myEmail } from "./session";
+import { addRevision, deleteRevisions, type RevisionKind } from "./revisions";
 import type { Message } from "../discord/schema";
 import { parseIncomingMessage } from "../discord/schema";
 import type { PublishedRef } from "../discord/webhook";
@@ -34,6 +35,8 @@ export interface Draft {
   serverId: string | null;
   published?: PublishInfo;
   deleted?: PublishInfo & { deletedAt: string; deletedBy?: string };
+  /** Number of the latest revision (see revisions.ts); absent until the first one. */
+  revision?: number;
 }
 
 export type MessageStatus = "draft" | "published" | "deleted";
@@ -66,7 +69,23 @@ export function getDraft(id: string | null): Draft | undefined {
   return id ? state.value.find((d) => d.id === id) : undefined;
 }
 
-export function createDraft(name: string, message: Message, serverId: string | null = null): Draft {
+/**
+ * Record a revision of a message and return the draft fields to update with
+ * it (the new revision number). Numbering continues from the draft.
+ */
+function revise(id: string, kind: RevisionKind, message: Message, note?: string): { revision: number } {
+  const number = (getDraft(id)?.revision ?? 0) + 1;
+  addRevision(id, { number, kind, message: clone(message), createdAt: new Date().toISOString(), createdBy: myEmail() || undefined, note });
+  return { revision: number };
+}
+
+export function createDraft(
+  name: string,
+  message: Message,
+  serverId: string | null = null,
+  /** Record revision 1 (pass false when a publish revision follows immediately). */
+  opts: { revision?: boolean; note?: string } = {}
+): Draft {
   const now = new Date().toISOString();
   const by = myEmail();
   const draft: Draft = {
@@ -79,13 +98,20 @@ export function createDraft(name: string, message: Message, serverId: string | n
     ...(by && { createdBy: by, updatedBy: by }),
   };
   store.set(draft);
+  if (opts.revision !== false) store.update(draft.id, revise(draft.id, "saved", message, opts.note));
   return draft;
 }
 
-export function updateDraftMessage(id: string, message: Message): Draft | undefined {
+/** Save new content to a draft, as a new revision unless `revision: false`. */
+export function updateDraftMessage(id: string, message: Message, opts: { revision?: boolean } = {}): Draft | undefined {
   const d = getDraft(id);
   if (!d) return;
-  store.update(id, { message: clone(message), updatedAt: new Date().toISOString(), updatedBy: myEmail() || undefined });
+  store.update(id, {
+    message: clone(message),
+    updatedAt: new Date().toISOString(),
+    updatedBy: myEmail() || undefined,
+    ...(opts.revision !== false && revise(id, "saved", message)),
+  });
   return d;
 }
 
@@ -116,6 +142,7 @@ export function markPublished(id: string, ref: PublishedRef, message: Message, s
     deleted: undefined,
     updatedAt: now,
     updatedBy: by,
+    ...revise(id, "published", message),
   });
 }
 
@@ -130,6 +157,7 @@ export function markUpdated(id: string, ref: PublishedRef, message: Message) {
     published: { ...d.published, ...clone(ref), updatedAt: now, updatedBy: by },
     updatedAt: now,
     updatedBy: by,
+    ...revise(id, "updated", message),
   });
 }
 
@@ -150,11 +178,14 @@ export function markDeleted(id: string) {
 export function duplicateDraft(id: string): Draft | undefined {
   const d = getDraft(id);
   if (!d) return;
-  return createDraft(`${d.name} (copy)`, d.message, d.serverId);
+  return createDraft(`${d.name} (copy)`, d.message, d.serverId, { note: `Duplicated from "${d.name}"` });
 }
 
 export function deleteDraft(id: string) {
-  store.remove(id);
+  // Revisions first: once the message is gone the rules can no longer tell whether they may be removed.
+  deleteRevisions(id)
+    .catch(() => {})
+    .finally(() => store.remove(id));
 }
 
 export function exportDrafts(

@@ -67,7 +67,8 @@ function describe(e: unknown): string {
 function ensureDraft(): string {
   const existing = getDraft(currentDraftId.value);
   if (currentDraftId.value && existing && !existing.published && !existing.deleted) {
-    updateDraftMessage(currentDraftId.value, message.value);
+    // The publish that follows records the revision.
+    updateDraftMessage(currentDraftId.value, message.value, { revision: false });
     // File an unassigned draft under the server of the webhook it was published through.
     if (!existing.serverId && selectedWebhookServerId()) setDraftServer(currentDraftId.value, selectedWebhookServerId());
     return currentDraftId.value;
@@ -75,7 +76,7 @@ function ensureDraft(): string {
   const first = message.value.embeds[0];
   const name =
     first?.title || message.value.content.split("\n")[0].slice(0, 60) || `Message ${new Date().toLocaleString()}`;
-  const d = createDraft(existing?.name ?? name, message.value, existing?.serverId ?? selectedWebhookServerId());
+  const d = createDraft(existing?.name ?? name, message.value, existing?.serverId ?? selectedWebhookServerId(), { revision: false });
   currentDraftId.value = d.id;
   if (!existing) toast("info", "Draft saved", `Tracking this message as "${d.name}".`);
   return d.id;

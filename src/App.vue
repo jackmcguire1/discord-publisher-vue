@@ -34,7 +34,8 @@ import { toast } from "./stores/toasts";
 import { hasLegacyData } from "./stores/legacy";
 import { isDismissed, dismiss } from "./stores/dismissed";
 import NewMessageDialog from "./components/NewMessageDialog.vue";
-import { newMessageDialog, requestNewMessage } from "./stores/editorActions";
+import { newMessageDialog, requestNewMessage, historyFor, openHistory } from "./stores/editorActions";
+import HistoryModal from "./components/HistoryModal.vue";
 import { route, href } from "./router";
 
 type View = "json" | "curl" | "drafts" | "webhooks" | null;
@@ -44,7 +45,7 @@ const draft = computed(() => getDraft(currentDraftId.value));
 function onKey(e: KeyboardEvent) {
   const target = e.target as HTMLElement | null;
   const typing = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA");
-  if (typing || view.value || authorsDialog.value || newMessageDialog.value || route.value.page !== "editor") return; // let native undo handle text fields and modals
+  if (typing || view.value || authorsDialog.value || newMessageDialog.value || historyFor.value || route.value.page !== "editor") return; // let native undo handle text fields and modals
   const mod = e.metaKey || e.ctrlKey;
   if (mod && e.key.toLowerCase() === "z") {
     e.preventDefault();
@@ -99,6 +100,9 @@ onUnmounted(() => window.removeEventListener("keydown", onKey));
               <h2 style="margin: 0">Message</h2>
               <span v-if="draft" class="muted small editing-name">{{ draft.name }}<template v-if="isDirty"> · unsaved changes</template></span>
               <span v-else class="muted small editing-name">Not saved yet</span>
+              <button v-if="draft?.revision" class="btn btn-ghost btn-sm editor-history" title="Revision history" @click="openHistory(draft.id)">
+                v{{ draft.revision }} · History
+              </button>
             </div>
             <button class="btn btn-primary btn-sm new-message" title="Start a blank message" @click="requestNewMessage()">+ New message</button>
           </div>
@@ -122,5 +126,6 @@ onUnmounted(() => window.removeEventListener("keydown", onKey));
     </div>
   </div>
   <NewMessageDialog v-if="newMessageDialog" />
+  <HistoryModal v-if="historyFor" :key="historyFor" />
   <Toasts />
 </template>

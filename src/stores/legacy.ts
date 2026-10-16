@@ -3,6 +3,7 @@ import { doc, writeBatch } from "firebase/firestore";
 import { db } from "../firebase";
 import { load } from "./persist";
 import { activeOrgId, canManage, canPublish, canDelete, user } from "./session";
+import { guestRevisions, clearGuestRevisions } from "./revisions";
 
 // Guests (and everyone before Firebase) keep webhooks, servers, authors and
 // drafts in this browser's localStorage. Once signed in, this offers a copy
@@ -43,23 +44,37 @@ export async function importLegacyData(): Promise<number> {
   // Published or deleted messages need the matching permission, or the whole batch is refused.
   const allowed = (k: Key, item: Record<string, unknown>) =>
     k !== "drafts" || ((!item.published || canPublish.value) && (!item.deleted || canDelete.value));
-  const writes = keys.flatMap((k) => legacy.value[k].filter((item) => allowed(k, item)).map((item) => ({ k, item })));
+  const writes: { k: string; item: { id: string } & Record<string, unknown> }[] = keys.flatMap((k) =>
+    legacy.value[k].filter((item) => allowed(k, item)).map((item) => ({ k, item }))
+  );
+  // Each imported message brings its revisions along.
+  const revisions = guestRevisions();
+  const importedDrafts = writes.filter((w) => w.k === "drafts").map((w) => w.item.id);
+  for (const draftId of importedDrafts) {
+    for (const rev of revisions[draftId] ?? []) {
+      if (rev.kind !== "saved" && !canPublish.value) continue;
+      writes.push({ k: `drafts/${draftId}/revisions`, item: rev as unknown as { id: string } & Record<string, unknown> });
+    }
+  }
 
   // Firestore batches cap at 500 writes.
   for (let i = 0; i < writes.length; i += 400) {
     const batch = writeBatch(db);
     for (const { k, item } of writes.slice(i, i + 400)) {
       const { id, ...data } = item;
-      batch.set(doc(db, "orgs", orgId, k, id), data);
+      for (const f of Object.keys(data)) if (data[f] === undefined) delete data[f];
+      batch.set(doc(db, "orgs", orgId, ...k.split("/"), id), data);
     }
     await batch.commit();
   }
   for (const k of keys) localStorage.removeItem(`discord-publisher:${k}`);
+  clearGuestRevisions(importedDrafts);
   legacy.value = read();
-  return writes.length;
+  return writes.filter((w) => !w.k.includes("/")).length;
 }
 
 export function discardLegacyData() {
   for (const k of KEYS) localStorage.removeItem(`discord-publisher:${k}`);
+  clearGuestRevisions(Object.keys(guestRevisions()));
   legacy.value = read();
 }

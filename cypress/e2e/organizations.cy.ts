@@ -69,3 +69,42 @@ describe("organizations page", () => {
     cy.get(".delete-org").should("exist");
   });
 });
+
+describe("transferring ownership", () => {
+  const TEAMMATE = "teammate@example.com";
+
+  it("the owner makes a member the owner and becomes an admin", () => {
+    cy.visitClean();
+    cy.accountMenu("Members");
+    cy.get(".invite-email").type(TEAMMATE, { delay: 0 });
+    cy.contains(".settings button", "Invite").click();
+    cy.get(".pending-invite").should("contain.text", TEAMMATE);
+    cy.accountMenu("Sign out");
+    cy.signIn(TEAMMATE);
+    cy.contains(".invite-item", "Test Org").contains("button", "Join").click();
+    cy.get(".discord-messages").should("exist");
+    // A member never sees the transfer button.
+    cy.accountMenu("Members");
+    cy.get(".make-owner").should("not.exist");
+    cy.accountMenu("Sign out");
+
+    cy.signIn();
+    cy.accountMenu("Members");
+    cy.contains(".member-item", TEAMMATE).find(".make-owner").click(); // Cypress accepts the confirm
+    cy.toast(`${TEAMMATE} is now the owner`);
+    cy.contains(".member-item", TEAMMATE).find(".member-role").should("have.text", "owner");
+    cy.get(".make-owner").should("not.exist");
+    cy.get(".avatar-btn").click();
+    cy.get(".nav-menu .nav-role").should("have.text", "admin");
+    cy.get("body").type("{esc}");
+
+    // No longer the owner, so leaving is possible.
+    cy.contains(".settings-tab", "Organizations").click();
+    cy.get(".leave-org").should("exist");
+    cy.accountMenu("Sign out");
+
+    cy.signIn(TEAMMATE);
+    cy.get(".avatar-btn").click();
+    cy.get(".nav-menu .nav-role").should("have.text", "owner");
+  });
+});

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { after, before, beforeEach, describe, it } from "node:test";
 import { initializeTestEnvironment, assertFails, assertSucceeds } from "@firebase/rules-unit-testing";
 import {
+  collection,
   collectionGroup,
   deleteDoc,
   doc,
@@ -306,5 +307,75 @@ describe("messages: publish and delete permissions", () => {
     await assertFails(setDoc(doc(as("invitee"), "orgs", ORG, "members", "invitee"), { ...member, canPublish: true, canDelete: false }));
     await assertFails(setDoc(doc(as("invitee"), "orgs", ORG, "members", "invitee"), member)); // missing flags default to publish=true
     await assertSucceeds(setDoc(doc(as("invitee"), "orgs", ORG, "members", "invitee"), { ...member, canPublish: false, canDelete: false }));
+  });
+});
+
+describe("message revisions", () => {
+  const draft = { name: "D", createdAt: now, updatedAt: now, serverId: null, message: { content: "hi", embeds: [] } };
+  const rev = (who, kind, extra = {}) => ({ number: 1, kind, message: { content: "hi" }, createdAt: now, createdBy: people[who].email, ...extra });
+  const revDoc = (db, id = "r1") => doc(db, "orgs", ORG, "drafts", "d1", "revisions", id);
+
+  async function seed(data, revs = {}) {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "orgs", ORG, "drafts", "d1"), data);
+      for (const [id, r] of Object.entries(revs)) await setDoc(doc(ctx.firestore(), "orgs", ORG, "drafts", "d1", "revisions", id), r);
+    });
+  }
+
+  it("members record saved revisions; published/updated ones need canPublish", async () => {
+    await seed(draft);
+    await assertSucceeds(setDoc(revDoc(as("viewer")), rev("viewer", "saved")));
+    await assertFails(setDoc(revDoc(as("viewer"), "r2"), rev("viewer", "published")));
+    await assertSucceeds(setDoc(revDoc(as("member"), "r3"), rev("member", "updated")));
+    await assertFails(setDoc(revDoc(as("outsider"), "r4"), rev("outsider", "saved")));
+    await assertSucceeds(getDocs(collection(as("viewer"), "orgs", ORG, "drafts", "d1", "revisions")));
+  });
+
+  it("revisions can't be forged or edited", async () => {
+    await seed(draft, { r1: rev("member", "saved") });
+    await assertFails(setDoc(revDoc(as("member"), "r2"), rev("admin", "saved"))); // someone else's name
+    await assertFails(setDoc(revDoc(as("member"), "r3"), rev("member", "saved", { extra: true })));
+    await assertFails(setDoc(revDoc(as("member"), "r4"), rev("member", "rewritten")));
+    await assertFails(updateDoc(revDoc(as("admin")), { message: { content: "changed" } }));
+  });
+
+  it("revisions are removed with their message, under the same permission", async () => {
+    await seed(draft, { r1: rev("member", "saved") });
+    await assertSucceeds(deleteDoc(revDoc(as("viewer")))); // plain draft: any member
+    await seed({ ...draft, published: { messageId: "m", channelId: "c", webhookId: "1", publishedAt: now } }, { r1: rev("member", "published") });
+    await assertFails(deleteDoc(revDoc(as("member"))));
+    await assertSucceeds(deleteDoc(revDoc(as("deleter"))));
+  });
+});
+
+describe("transferring ownership", () => {
+  function transfer(db, from, to) {
+    const batch = writeBatch(db);
+    batch.update(doc(db, "orgs", ORG), { ownerUid: to });
+    batch.update(doc(db, "orgs", ORG, "members", to), { role: "owner" });
+    batch.update(doc(db, "orgs", ORG, "members", from), { role: "admin" });
+    return batch.commit();
+  }
+
+  it("the owner hands over to a member and becomes an admin", async () => {
+    await assertSucceeds(transfer(as("owner"), "owner", "member"));
+  });
+
+  it("only the owner can transfer, and only all three changes together", async () => {
+    await assertFails(transfer(as("admin"), "owner", "admin"));
+    const db = as("owner");
+    // Promoting someone without stepping down (two owners).
+    const twoOwners = writeBatch(db);
+    twoOwners.update(doc(db, "orgs", ORG), { ownerUid: "member" });
+    twoOwners.update(doc(db, "orgs", ORG, "members", "member"), { role: "owner" });
+    await assertFails(twoOwners.commit());
+    // Stepping down without anyone taking over (no owner).
+    await assertFails(updateDoc(doc(db, "orgs", ORG, "members", "owner"), { role: "admin" }));
+    // Pointing ownerUid at someone without changing roles.
+    await assertFails(updateDoc(doc(db, "orgs", ORG), { ownerUid: "member" }));
+  });
+
+  it("can't transfer to someone outside the org", async () => {
+    await assertFails(transfer(as("owner"), "owner", "outsider"));
   });
 });

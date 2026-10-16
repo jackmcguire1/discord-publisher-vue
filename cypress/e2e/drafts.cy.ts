@@ -20,6 +20,7 @@ describe("drafts", () => {
       stub.onSecondCall().returns("Second");
     });
     cy.contains("button", "Save draft").click();
+    cy.get("textarea").first().type("change", { delay: 0 });
     cy.contains("button", "Update draft").click();
     cy.toast("Draft updated");
     cy.contains("button", "Save as new").click();

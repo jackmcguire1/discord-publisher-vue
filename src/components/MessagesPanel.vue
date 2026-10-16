@@ -13,17 +13,18 @@ import {
   type MessageStatus,
 } from "../stores/drafts";
 import { currentDraftId, replaceMessage, isDirty } from "../stores/message";
-import { requestNewMessage } from "../stores/editorActions";
+import { requestNewMessage, selectWebhookFor, openHistory } from "../stores/editorActions";
 import { messageLink, fetchMessage, type DiscordApiError } from "../discord/webhook";
 import { parseIncomingMessage } from "../discord/schema";
-import { webhookByDiscordId, getWebhook, selectWebhook } from "../stores/webhooks";
+import { webhookByDiscordId, getWebhook } from "../stores/webhooks";
 import { settings, webhookInfo } from "../stores/settings";
 import { canDelete } from "../stores/session";
 import { servers, getServer, addServer, findServerByName, guildIdFor, type Server } from "../stores/servers";
 import { downloadText, readFileAsText, slugify, formatDateTime } from "../util";
 import { toast } from "../stores/toasts";
 
-const emit = defineEmits<{ loaded: [] }>();
+/** `loaded`: a message is now in the editor. `handoff`: another dialog opened; a modal host should close. */
+const emit = defineEmits<{ loaded: []; handoff: [] }>();
 
 type Filter = "all" | MessageStatus;
 const filter = ref<Filter>("all");
@@ -71,9 +72,7 @@ async function load(d: Draft) {
     return;
   }
 
-  const hook = getWebhook(info.savedWebhookId) ?? webhookByDiscordId(info.webhookId);
-  if (hook) selectWebhook(hook.id);
-  settings.value.threadId = info.threadId ?? "";
+  selectWebhookFor(d);
   if (webhookInfo.value?.id !== info.webhookId) {
     replaceMessage(next, d.id);
     toast("info", "Loaded the saved copy", "The webhook that published it isn't available here, so it can't be refreshed from Discord or edited.");
@@ -219,6 +218,7 @@ async function importFiles(e: Event) {
             <div class="grow">
               <div class="row">
                 <span class="draft-name">{{ d.name }}</span>
+                <span v-if="d.revision" class="tag revision-tag" :title="`${d.revision} revision${d.revision === 1 ? '' : 's'}`">v{{ d.revision }}</span>
                 <span v-if="d.id === currentDraftId" class="tag">editing</span>
                 <span v-if="d.published" class="tag tag-green">published</span>
                 <span v-else-if="d.deleted" class="tag tag-red">deleted</span>
@@ -242,6 +242,7 @@ async function importFiles(e: Event) {
                 <option v-for="s in servers" :key="s.id" :value="s.id">{{ s.name }}</option>
               </select>
               <button class="btn btn-sm btn-primary" :disabled="loading === d.id" @click="load(d)">{{ loading === d.id ? "Loading…" : "Load" }}</button>
+              <button class="btn btn-sm btn-ghost message-history" :disabled="!d.revision" title="Revision history" @click="openHistory(d.id); emit('handoff')">History</button>
               <button class="btn btn-sm btn-ghost" title="Rename" @click="rename(d)">Rename</button>
               <button class="btn btn-sm btn-ghost" @click="duplicate(d)">Duplicate</button>
               <button class="btn btn-sm btn-ghost" @click="exportOne(d)">Export</button>
