@@ -15,6 +15,8 @@ import { load, save } from "./persist";
 interface Persisted {
   message: Message;
   draftId: string | null;
+  /** The message as last loaded, saved or published, to tell whether there are unsaved changes. */
+  clean?: string;
 }
 
 const persisted = load<Persisted | null>("current", null);
@@ -22,9 +24,17 @@ export const message = ref<Message>(persisted?.message ?? defaultMessage());
 /** Which saved draft this message was loaded from, if any. */
 export const currentDraftId = ref<string | null>(persisted?.draftId ?? null);
 
+const cleanSnapshot = ref(persisted?.clean ?? JSON.stringify(message.value));
+/** True when the editor has changes that aren't saved in a draft or published. */
+export const isDirty = computed(() => JSON.stringify(message.value) !== cleanSnapshot.value);
+/** Call after the current message has been saved or published. */
+export function markClean() {
+  cleanSnapshot.value = JSON.stringify(message.value);
+}
+
 watch(
-  [message, currentDraftId],
-  () => save("current", { message: message.value, draftId: currentDraftId.value }),
+  [message, currentDraftId, cleanSnapshot],
+  () => save("current", { message: message.value, draftId: currentDraftId.value, clean: cleanSnapshot.value }),
   { deep: true }
 );
 
@@ -111,6 +121,7 @@ export function replaceMessage(next: Message, draftId: string | null = null) {
   message.value = next;
   currentDraftId.value = draftId;
   errors.value = validateMessage(next);
+  markClean();
 }
 
 export function addEmbed() {

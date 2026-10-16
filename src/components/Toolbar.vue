@@ -1,11 +1,9 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { message, currentDraftId, undo, redo, canUndo, canRedo, replaceMessage } from "../stores/message";
-import { drafts, getDraft, createDraft, updateDraftMessage, statusOf } from "../stores/drafts";
-import { emptyMessage } from "../discord/schema";
-import { selectedWebhookServerId } from "../stores/webhooks";
+import { currentDraftId, undo, redo, canUndo, canRedo } from "../stores/message";
+import { drafts, getDraft, statusOf } from "../stores/drafts";
 import { openAuthors, savedAuthors } from "../stores/authors";
-import { toast } from "../stores/toasts";
+import { saveDraft, saveAsNewDraft as saveAsNew } from "../stores/editorActions";
 
 const emit = defineEmits<{ open: [view: "json" | "curl" | "drafts"] }>();
 
@@ -13,28 +11,6 @@ const draft = computed(() => getDraft(currentDraftId.value));
 /** Published and deleted messages are history; saving starts a new draft rather than changing them. */
 const editableDraft = computed(() => (draft.value && statusOf(draft.value) === "draft" ? draft.value : undefined));
 
-function saveDraft() {
-  if (editableDraft.value) {
-    updateDraftMessage(editableDraft.value.id, message.value);
-    toast("success", "Draft updated", editableDraft.value.name);
-    return;
-  }
-  saveAsNew();
-}
-
-function saveAsNew() {
-  const suggested = message.value.embeds[0]?.title || message.value.content.split("\n")[0].slice(0, 60) || "Untitled";
-  const name = prompt("Draft name", suggested);
-  if (name === null) return;
-  const d = createDraft(name, message.value, selectedWebhookServerId());
-  currentDraftId.value = d.id;
-  toast("success", "Draft saved", d.name);
-}
-
-function clear() {
-  if (!confirm("Clear the editor? Saved drafts are not affected.")) return;
-  replaceMessage(emptyMessage(), null);
-}
 </script>
 
 <template>
@@ -42,7 +18,6 @@ function clear() {
     <div class="row">
       <button class="btn btn-ghost btn-sm" :disabled="!canUndo" title="Undo (Ctrl+Z)" @click="undo">Undo</button>
       <button class="btn btn-ghost btn-sm" :disabled="!canRedo" title="Redo (Ctrl+Shift+Z)" @click="redo">Redo</button>
-      <button class="btn btn-ghost btn-sm" @click="clear">Clear message</button>
       <button class="btn btn-ghost btn-sm" @click="emit('open', 'json')">JSON</button>
       <button class="btn btn-ghost btn-sm" @click="emit('open', 'curl')">cURL</button>
     </div>

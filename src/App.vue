@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from "vue";
-import { message, currentDraftId, undo, redo } from "./stores/message";
+import { message, currentDraftId, undo, redo, isDirty } from "./stores/message";
 import { getDraft } from "./stores/drafts";
 import Toolbar from "./components/Toolbar.vue";
 import PublishPanel from "./components/PublishPanel.vue";
@@ -33,6 +33,8 @@ import {
 import { toast } from "./stores/toasts";
 import { hasLegacyData } from "./stores/legacy";
 import { isDismissed, dismiss } from "./stores/dismissed";
+import NewMessageDialog from "./components/NewMessageDialog.vue";
+import { newMessageDialog, requestNewMessage } from "./stores/editorActions";
 import { route, href } from "./router";
 
 type View = "json" | "curl" | "drafts" | "webhooks" | null;
@@ -42,7 +44,7 @@ const draft = computed(() => getDraft(currentDraftId.value));
 function onKey(e: KeyboardEvent) {
   const target = e.target as HTMLElement | null;
   const typing = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA");
-  if (typing || view.value || authorsDialog.value || route.value.page !== "editor") return; // let native undo handle text fields and modals
+  if (typing || view.value || authorsDialog.value || newMessageDialog.value || route.value.page !== "editor") return; // let native undo handle text fields and modals
   const mod = e.metaKey || e.ctrlKey;
   if (mod && e.key.toLowerCase() === "z") {
     e.preventDefault();
@@ -93,9 +95,12 @@ onUnmounted(() => window.removeEventListener("keydown", onKey));
             <button class="banner-close" aria-label="Dismiss" title="Dismiss" @click="dismiss('legacy-import', { persist: false })">✕</button>
           </div>
           <div class="row row-between">
-            <h2 style="margin: 0">Message</h2>
-            <span v-if="draft" class="muted small">Draft: <strong>{{ draft.name }}</strong></span>
-            <span v-else class="muted small">Unsaved message</span>
+            <div class="row">
+              <h2 style="margin: 0">Message</h2>
+              <span v-if="draft" class="muted small editing-name">{{ draft.name }}<template v-if="isDirty"> · unsaved changes</template></span>
+              <span v-else class="muted small editing-name">Not saved yet</span>
+            </div>
+            <button class="btn btn-primary btn-sm new-message" title="Start a blank message" @click="requestNewMessage()">+ New message</button>
           </div>
           <PublishPanel @manage="view = 'webhooks'" />
           <Toolbar @open="view = $event" />
@@ -116,5 +121,6 @@ onUnmounted(() => window.removeEventListener("keydown", onKey));
       <AuthorsModal v-if="authorsDialog" :key="JSON.stringify(authorsDialog.prefill)" />
     </div>
   </div>
+  <NewMessageDialog v-if="newMessageDialog" />
   <Toasts />
 </template>

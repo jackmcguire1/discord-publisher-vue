@@ -12,7 +12,8 @@ import {
   type Draft,
   type MessageStatus,
 } from "../stores/drafts";
-import { message, currentDraftId, replaceMessage } from "../stores/message";
+import { currentDraftId, replaceMessage, isDirty } from "../stores/message";
+import { requestNewMessage } from "../stores/editorActions";
 import { messageLink, fetchMessage, type DiscordApiError } from "../discord/webhook";
 import { parseIncomingMessage } from "../discord/schema";
 import { webhookByDiscordId, getWebhook, selectWebhook } from "../stores/webhooks";
@@ -59,9 +60,7 @@ const loading = ref<string | null>(null);
  * edited since), falling back to the stored copy.
  */
 async function load(d: Draft) {
-  const current = drafts.value.find((x) => x.id === currentDraftId.value)?.message;
-  const unsaved = currentDraftId.value !== d.id && JSON.stringify(message.value) !== JSON.stringify(current);
-  if (unsaved && !confirm("Replace the current editor contents with this message? Unsaved changes will be lost (undo still works).")) return;
+  if (isDirty.value && currentDraftId.value !== d.id && !confirm("Replace the current editor contents with this message? Unsaved changes will be lost (undo still works).")) return;
 
   let next = JSON.parse(JSON.stringify(d.message));
   const info = d.published;
@@ -184,6 +183,10 @@ async function importFiles(e: Event) {
 
 <template>
   <div class="stack messages-panel" style="--gap: 12px">
+    <div class="row row-between">
+      <span class="muted small">{{ drafts.length }} message{{ drafts.length === 1 ? "" : "s" }}</span>
+      <button class="btn btn-primary btn-sm new-message" @click="requestNewMessage(() => emit('loaded'))">+ New message</button>
+    </div>
     <div v-if="!drafts.length" class="empty">
       No messages yet. Use “Save draft” in the toolbar, or publish a message and it will be tracked here automatically.
     </div>

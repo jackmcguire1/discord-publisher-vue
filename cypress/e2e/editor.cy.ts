@@ -62,8 +62,8 @@ describe("editor and preview", () => {
     cy.get(".discord-embed-title").should("have.text", "Renamed");
   });
 
-  it("clears the message and blocks publishing when empty", () => {
-    cy.contains("button", "Clear message").click();
+  it("a new message starts empty and blocks publishing until it has content", () => {
+    cy.contains("button", "New message").click();
     cy.get(".discord-embed").should("not.exist");
     cy.contains(".banner-error", "validation issue").should("exist");
     cy.contains(".field-error", "Add some content or at least one embed").should("exist");

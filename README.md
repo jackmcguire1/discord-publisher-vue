@@ -74,6 +74,7 @@ Live site: **https://jackmcguire1.github.io/discord-publisher-vue/**
 - **Messages** in the navigation bar (or the toolbar, as a quick dialog) lists drafts, published messages and messages deleted from Discord, with filters for each.
 - Every publish is recorded with who published it, when, through which webhook, and who last updated it. Deleting from Discord keeps the message as history (marked deleted) instead of losing it; publishing it again creates a new message.
 - **Load** on a published message selects the webhook it went through and pulls its current content from Discord, ready to update or delete.
+- **+ New message** (editor header, Messages page) starts a blank message, keeping your webhook identity and selected webhook. If the editor has unsaved changes it asks first: save as a draft, discard, or cancel. The header shows the message you're editing and whether it has unsaved changes.
 - Save, rename, duplicate, delete, export and import drafts.
 - Publishing automatically creates a draft if you have not saved one, so every send is tracked.
 - Drafts record when they were last updated and when and where they were published.

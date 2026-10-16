@@ -3,7 +3,7 @@ import { ref, computed } from "vue";
 import { settings, webhookInfo } from "../stores/settings";
 import { savedWebhooks, getWebhook, selectWebhook, webhookByDiscordId, selectedWebhookServerId } from "../stores/webhooks";
 import { servers, getServer, guildIdFor } from "../stores/servers";
-import { message, isValid, errors, currentDraftId } from "../stores/message";
+import { message, isValid, errors, currentDraftId, markClean } from "../stores/message";
 import { getDraft, createDraft, updateDraftMessage, setDraftServer, markPublished, markUpdated, markDeleted } from "../stores/drafts";
 import { sendMessage, editMessage, deleteMessage, messageLink, type DiscordApiError } from "../discord/webhook";
 import { toast } from "../stores/toasts";
@@ -90,6 +90,7 @@ async function publish() {
     });
     const id = ensureDraft();
     markPublished(id, ref, message.value, settings.value.webhookId);
+    markClean();
     toast("success", "Published", `Message ${ref.messageId} sent to Discord.`);
   } catch (e) {
     toast("error", "Publish failed", describe(e), 10000);
@@ -104,6 +105,7 @@ async function update() {
   try {
     const ref = await editMessage(settings.value.webhookUrl, published.value, message.value);
     markUpdated(currentDraftId.value, ref, message.value);
+    markClean();
     toast("success", "Updated", `Message ${ref.messageId} edited on Discord.`);
   } catch (e) {
     toast("error", "Update failed", describe(e), 10000);

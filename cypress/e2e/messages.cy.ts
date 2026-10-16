@@ -26,7 +26,7 @@ describe("messages: published history", () => {
     cy.get("body").type("{esc}");
 
     // Start over, switch to a hand-typed URL, then load the message back.
-    cy.contains("button", "Clear message").click();
+    cy.contains("button", "New message").click();
     cy.get("select.webhook-select").select("Custom URL");
     cy.setWebhook("https://discord.com/api/webhooks/1/other");
     cy.openModal("Messages");

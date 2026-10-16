@@ -5,7 +5,7 @@ describe("drafts", () => {
     cy.window().then((w) => cy.stub(w, "prompt").returns("Release notes"));
     cy.contains("button", "Save draft").click();
     cy.toast("Draft saved");
-    cy.contains("Draft:").should("contain.text", "Release notes");
+    cy.get(".editing-name").should("contain.text", "Release notes");
 
     cy.openModal("Messages");
     cy.get(".draft").should("have.length", 1).and("have.class", "active");
@@ -23,7 +23,7 @@ describe("drafts", () => {
     cy.contains("button", "Update draft").click();
     cy.toast("Draft updated");
     cy.contains("button", "Save as new").click();
-    cy.contains("Draft:").should("contain.text", "Second");
+    cy.get(".editing-name").should("contain.text", "Second");
     cy.openModal("Messages");
     cy.get(".draft").should("have.length", 2);
   });
@@ -32,7 +32,7 @@ describe("drafts", () => {
     cy.window().then((w) => cy.stub(w, "prompt").returns("Original"));
     cy.contains("button", "Save draft").click();
 
-    cy.contains("button", "Clear message").click();
+    cy.contains("button", "New message").click();
     cy.get(".discord-embed").should("not.exist");
 
     cy.openModal("Messages");
