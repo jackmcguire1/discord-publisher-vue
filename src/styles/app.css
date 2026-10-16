@@ -441,3 +441,6 @@ select.nav-org option { background: var(--bg-1); color: var(--text); }
 .btn-group > .btn:first-child { border-radius: var(--radius) 0 0 var(--radius); }
 .btn-group > .btn:last-child { border-radius: 0 var(--radius) var(--radius) 0; }
 .btn-group > .btn + .btn { margin-left: -1px; }
+
+.server-access { display: inline-flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.member-access { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }

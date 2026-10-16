@@ -1,5 +1,6 @@
 import { computed } from "vue";
 import { orgCollection } from "./orgCollection";
+import { serverAccess } from "./session";
 import { clearWebhookServer } from "./webhooks";
 import { clearDraftServer } from "./drafts";
 
@@ -18,7 +19,13 @@ export interface Server {
 const store = orgCollection<Server>("servers");
 const state = store.items;
 
-export const servers = computed(() => [...state.value].sort((a, b) => a.name.localeCompare(b.name)));
+/** Servers the user can use (all of them unless their access is limited), by name. */
+export const servers = computed(() => {
+  const access = serverAccess.value;
+  return [...state.value].filter((s) => access === null || access.includes(s.id)).sort((a, b) => a.name.localeCompare(b.name));
+});
+/** Every server in the org, for admins assigning access. */
+export const allServers = computed(() => [...state.value].sort((a, b) => a.name.localeCompare(b.name)));
 
 export function getServer(id: string | null | undefined): Server | undefined {
   return id ? state.value.find((s) => s.id === id) : undefined;

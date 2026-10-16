@@ -31,6 +31,8 @@ import {
 } from "./stores/session";
 import { toast } from "./stores/toasts";
 import { hasLegacyData } from "./stores/legacy";
+// Clears the webhook fields when switching org or signing in/out.
+import "./stores/workspace";
 import { isDismissed, dismiss } from "./stores/dismissed";
 import NewMessageDialog from "./components/NewMessageDialog.vue";
 import { newMessageDialog, historyFor } from "./stores/editorActions";

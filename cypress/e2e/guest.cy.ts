@@ -54,7 +54,9 @@ describe("guest mode", () => {
     cy.contains(".settings button", "Import into Test Org").click();
     cy.toast("Imported 1 item");
     cy.contains(".nav-link", "Editor").click();
-    cy.get("select.webhook-select").find("option:selected").should("have.text", "Guest hook");
+    // The imported webhook is there to pick, but signing in cleared the guest's selection.
+    cy.get("select.webhook-select").should("contain.text", "Guest hook");
+    cy.get("select.webhook-select").find("option:selected").should("have.text", "Custom URL");
 
     // Signing out leaves a clean guest workspace; the data now lives in the org.
     cy.accountMenu("Sign out");

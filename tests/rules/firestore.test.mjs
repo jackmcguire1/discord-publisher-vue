@@ -408,3 +408,57 @@ describe("transferring ownership", () => {
     await assertFails(transfer(as("owner"), "owner", "outsider"));
   });
 });
+
+describe("server-scoped access", () => {
+  const hook = (serverId) => ({ name: "H", description: "", url: WEBHOOK_URL, serverId, createdAt: now });
+
+  async function seedAccess() {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, "orgs", ORG, "webhooks", "inA"), hook("A"));
+      await setDoc(doc(db, "orgs", ORG, "webhooks", "inB"), hook("B"));
+      await setDoc(doc(db, "orgs", ORG, "webhooks", "loose"), hook(null));
+      await setDoc(doc(db, "orgs", ORG, "members", "limited"), { uid: "limited", email: "limited@example.com", role: "member", joinedAt: now, servers: ["A"] });
+    });
+  }
+  const limited = () => env.authenticatedContext("limited", { email: "limited@example.com", email_verified: true }).firestore();
+
+  it("a limited member reads only webhooks of their servers", async () => {
+    await seedAccess();
+    await assertSucceeds(getDoc(doc(limited(), "orgs", ORG, "webhooks", "inA")));
+    await assertFails(getDoc(doc(limited(), "orgs", ORG, "webhooks", "inB")));
+    await assertFails(getDoc(doc(limited(), "orgs", ORG, "webhooks", "loose")));
+  });
+
+  it("a limited member can list with a server filter, but not the whole collection", async () => {
+    await seedAccess();
+    const hooks = collection(limited(), "orgs", ORG, "webhooks");
+    const snap = await assertSucceeds(getDocs(query(hooks, where("serverId", "in", ["A"]))));
+    if (snap.size !== 1) throw new Error(`expected 1 webhook, got ${snap.size}`);
+    await assertFails(getDocs(hooks));
+    await assertFails(getDocs(query(hooks, where("serverId", "in", ["A", "B"]))));
+  });
+
+  it("members with all-server access and admins see everything", async () => {
+    await seedAccess();
+    await assertSucceeds(getDocs(collection(as("member"), "orgs", ORG, "webhooks")));
+    await assertSucceeds(getDoc(doc(as("admin"), "orgs", ORG, "webhooks", "loose")));
+  });
+
+  it("admins set a member's servers; members can't widen their own", async () => {
+    await seedAccess();
+    await assertSucceeds(updateDoc(doc(as("admin"), "orgs", ORG, "members", "member"), { servers: ["A", "B"] }));
+    await assertSucceeds(updateDoc(doc(as("admin"), "orgs", ORG, "members", "member"), { servers: null }));
+    await assertFails(updateDoc(doc(limited(), "orgs", ORG, "members", "limited"), { servers: null }));
+    await assertFails(updateDoc(doc(as("admin"), "orgs", ORG, "members", "member"), { servers: "A" }));
+  });
+
+  it("an invitee joins with exactly the invited servers", async () => {
+    await env.withSecurityRulesDisabled((ctx) =>
+      updateDoc(doc(ctx.firestore(), "orgs", ORG, "invites", people.invitee.email), { servers: ["A"] })
+    );
+    const member = { uid: "invitee", email: people.invitee.email, role: "member", joinedAt: now, canPublish: true, canDelete: false };
+    await assertFails(setDoc(doc(as("invitee"), "orgs", ORG, "members", "invitee"), member)); // dropping the limit
+    await assertSucceeds(setDoc(doc(as("invitee"), "orgs", ORG, "members", "invitee"), { ...member, servers: ["A"] }));
+  });
+});

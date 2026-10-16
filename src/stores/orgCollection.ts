@@ -1,5 +1,5 @@
 import { ref, watch, type Ref } from "vue";
-import { collection, deleteDoc, deleteField, doc, onSnapshot, setDoc, updateDoc } from "firebase/firestore";
+import { collection, deleteDoc, deleteField, doc, onSnapshot, query, setDoc, updateDoc, type QueryConstraint } from "firebase/firestore";
 import { db } from "../firebase";
 import { activeOrgId, authReady, user } from "./session";
 import { load, save } from "./persist";
@@ -28,20 +28,33 @@ function localId(): string {
     : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function orgCollection<T extends { id: string }>(name: string): OrgCollection<T> {
+export function orgCollection<T extends { id: string }>(
+  name: string,
+  opts: {
+    /**
+     * Filters for the Firestore listener, re-run when they change; null loads
+     * nothing. For collections the rules only partly expose (rules aren't
+     * filters, so the query must ask for exactly what's allowed).
+     */
+    constraints?: () => QueryConstraint[] | null;
+    /** Plain value the constraints depend on; the listener restarts only when it changes. */
+    constraintsKey?: () => string;
+  } = {}
+): OrgCollection<T> {
   const items = ref<T[]>([]) as Ref<T[]>;
   let stop: (() => void) | null = null;
   const guest = () => authReady.value && !user.value;
 
   watch(
-    [activeOrgId, guest],
+    [activeOrgId, guest, () => opts.constraintsKey?.() ?? ""],
     ([orgId, isGuest]) => {
       stop?.();
       stop = null;
       items.value = isGuest ? load<T[]>(name, []) : [];
-      if (!orgId) return;
+      const constraints = opts.constraints ? opts.constraints() : [];
+      if (!orgId || constraints === null) return;
       stop = onSnapshot(
-        collection(db, "orgs", orgId, name),
+        query(collection(db, "orgs", orgId, name), ...constraints),
         (snap) => (items.value = snap.docs.map((d) => ({ ...d.data(), id: d.id }) as T)),
         (e) => toast("error", `Could not load ${name}`, e.message)
       );

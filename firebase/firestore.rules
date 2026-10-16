@@ -2,10 +2,10 @@ rules_version = '2';
 
 // Data model
 //   orgs/{orgId}                    { name, ownerUid, createdAt, deleting? }
-//   orgs/{orgId}/members/{uid}      { uid, email, role: owner|admin|member, joinedAt, canPublish?, canDelete? }
-//   orgs/{orgId}/invites/{email}    { email, role: admin|member, orgName, invitedBy, createdAt, canPublish?, canDelete? }
+//   orgs/{orgId}/members/{uid}      { uid, email, role: owner|admin|member, joinedAt, canPublish?, canDelete?, servers? }
+//   orgs/{orgId}/invites/{email}    { email, role: admin|member, orgName, invitedBy, createdAt, canPublish?, canDelete?, servers? }
 //   orgs/{orgId}/servers/{id}       admins write, members read
-//   orgs/{orgId}/webhooks/{id}      admins write, members read (holds the webhook token)
+//   orgs/{orgId}/webhooks/{id}      admins write; members read those of servers they can access (holds the webhook token)
 //   orgs/{orgId}/authors/{id}       members read/write
 //   orgs/{orgId}/drafts/{id}        messages: drafts, published (`published`) and deleted from Discord (`deleted`)
 //     .../revisions/{revId}         { number, kind: saved|published|updated, message, createdAt, createdBy, note?, updatedAt?, updatedBy? }
@@ -16,6 +16,11 @@ rules_version = '2';
 // or deleted message from the org. Plain drafts are open to every member.
 // Discord itself is called from the browser, so these rules govern the org's
 // records of messages, not Discord.
+//
+// Server access: a member's `servers` is either absent/null (all servers) or a
+// list of server ids. A member limited to a list can only read webhooks filed
+// under those servers (so their tokens never reach anyone else); webhooks not
+// filed under a server need access to all servers. Owners and admins see all.
 //
 // Everything is scoped to an org. Users join by creating an org (becoming its
 // owner) or by accepting an invite addressed to their verified email.
@@ -95,6 +100,18 @@ service cloud.firestore {
       return getAfter(/databases/$(database)/documents/orgs/$(orgId)/members/$(uid)).data;
     }
 
+    function allServers(orgId) {
+      return isAdmin(orgId) || get(memberPath(orgId)).data.get('servers', null) == null;
+    }
+
+    function canSeeServer(orgId, serverId) {
+      return allServers(orgId) || (serverId != null && serverId in get(memberPath(orgId)).data.servers);
+    }
+
+    function validServers(data) {
+      return data.get('servers', null) == null || (data.servers is list && data.servers.size() <= 30);
+    }
+
     function isDeleting(orgId) {
       return exists(orgPath(orgId)) && get(orgPath(orgId)).data.get('deleting', false) == true;
     }
@@ -142,7 +159,7 @@ service cloud.firestore {
 
         allow create: if signedIn()
           && uid == request.auth.uid
-          && request.resource.data.keys().hasOnly(['uid', 'email', 'role', 'joinedAt', 'canPublish', 'canDelete'])
+          && request.resource.data.keys().hasOnly(['uid', 'email', 'role', 'joinedAt', 'canPublish', 'canDelete', 'servers'])
           && request.resource.data.uid == uid
           && request.resource.data.email == myEmail()
           && (
@@ -156,7 +173,8 @@ service cloud.firestore {
               && exists(invitePath(orgId))
               && get(invitePath(orgId)).data.role == request.resource.data.role
               && get(invitePath(orgId)).data.get('canPublish', true) == request.resource.data.get('canPublish', true)
-              && get(invitePath(orgId)).data.get('canDelete', false) == request.resource.data.get('canDelete', false))
+              && get(invitePath(orgId)).data.get('canDelete', false) == request.resource.data.get('canDelete', false)
+              && get(invitePath(orgId)).data.get('servers', null) == request.resource.data.get('servers', null))
           );
 
         // Admins can switch others between admin and member and set their
@@ -164,9 +182,10 @@ service cloud.firestore {
         allow update: if (isAdmin(orgId)
           && uid != request.auth.uid
           && resource.data.role != 'owner'
-          && onlyChanges(['role', 'canPublish', 'canDelete'])
+          && onlyChanges(['role', 'canPublish', 'canDelete', 'servers'])
           && request.resource.data.role in ['admin', 'member']
-          && validPerms(request.resource.data))
+          && validPerms(request.resource.data)
+          && validServers(request.resource.data))
           // Ownership transfer: the owner promotes another member...
           || (isOwner(orgId)
             && uid != request.auth.uid
@@ -193,8 +212,9 @@ service cloud.firestore {
       match /invites/{inviteEmail} {
         allow read: if isMember(orgId) || (verified() && inviteEmail == myEmail());
         allow create, update: if isAdmin(orgId)
-          && request.resource.data.keys().hasOnly(['email', 'role', 'orgName', 'invitedBy', 'createdAt', 'canPublish', 'canDelete'])
+          && request.resource.data.keys().hasOnly(['email', 'role', 'orgName', 'invitedBy', 'createdAt', 'canPublish', 'canDelete', 'servers'])
           && validPerms(request.resource.data)
+          && validServers(request.resource.data)
           && request.resource.data.email == inviteEmail
           && inviteEmail == inviteEmail.lower()
           && shortString(inviteEmail, 320)
@@ -214,7 +234,8 @@ service cloud.firestore {
       }
 
       match /webhooks/{id} {
-        allow read: if isMember(orgId);
+        // Limited members list their webhooks with where("serverId", "in", theirServers).
+        allow read: if isMember(orgId) && canSeeServer(orgId, resource.data.get('serverId', null));
         allow create, update: if isAdmin(orgId)
           && shortString(request.resource.data.name, 100)
           && shortString(request.resource.data.description, 500)

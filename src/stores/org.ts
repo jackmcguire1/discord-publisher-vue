@@ -1,7 +1,7 @@
 import { ref, watch } from "vue";
 import { collection, deleteDoc, doc, getDocs, onSnapshot, setDoc, updateDoc, writeBatch, type DocumentReference } from "firebase/firestore";
 import { db } from "../firebase";
-import { activeOrgId, activeOrgName, user, departOrg, permissionsFor, type Invite, type Permissions, type Role } from "./session";
+import { activeOrgId, activeOrgName, user, departOrg, permissionsFor, serversFor, type Invite, type Permissions, type Role } from "./session";
 
 // Membership management for the active org: who is in it, who is invited,
 // and the admin actions on both.
@@ -11,6 +11,8 @@ export interface Member extends Permissions {
   email: string;
   role: Role;
   joinedAt: string;
+  /** Server ids they may use, or null for all servers. */
+  servers: string[] | null;
 }
 
 export const members = ref<Member[]>([]);
@@ -31,7 +33,7 @@ watch(
         members.value = snap.docs
           .map((d) => {
             const data = d.data() as Member;
-            return { ...data, ...permissionsFor(data.role, data) };
+            return { ...data, ...permissionsFor(data.role, data), servers: serversFor(data.role, data) };
           })
           .sort((a, b) => order[a.role] - order[b.role] || a.email.localeCompare(b.email));
       }, (e) => console.error("members listener", e)),
@@ -54,13 +56,20 @@ export function renameOrg(name: string) {
   return updateDoc(doc(db, "orgs", orgId()), { name: name.trim() });
 }
 
-export function inviteMember(email: string, role: Invite["role"], perms: Permissions = { canPublish: true, canDelete: false }) {
+export function inviteMember(
+  email: string,
+  role: Invite["role"],
+  perms: Permissions = { canPublish: true, canDelete: false },
+  /** Server ids for a limited member, or null for all servers. */
+  servers: string[] | null = null
+) {
   const e = email.trim().toLowerCase();
   return setDoc(doc(db, "orgs", orgId(), "invites", e), {
     email: e,
     role,
     canPublish: perms.canPublish,
     canDelete: perms.canDelete,
+    ...(role === "member" && servers && { servers }),
     orgName: activeOrgName.value,
     invitedBy: user.value!.uid,
     createdAt: new Date().toISOString(),
@@ -77,6 +86,11 @@ export function declineInvite(invite: Invite) {
 
 export function setMemberRole(uid: string, role: Exclude<Role, "owner">) {
   return updateDoc(doc(db, "orgs", orgId(), "members", uid), { role });
+}
+
+/** Limit a member to some servers, or pass null for all servers. */
+export function setMemberServers(uid: string, servers: string[] | null) {
+  return updateDoc(doc(db, "orgs", orgId(), "members", uid), { servers });
 }
 
 export function setMemberPermissions(uid: string, patch: Partial<Permissions>) {

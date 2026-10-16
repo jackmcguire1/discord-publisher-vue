@@ -24,6 +24,8 @@ export interface Membership {
   canPublish: boolean;
   /** Delete messages from Discord and remove published ones. Admins and owners always can. */
   canDelete: boolean;
+  /** Server ids this member may use, or null for all servers (always null for admins and owners). */
+  servers: string[] | null;
 }
 
 /** Permission flags as stored on member and invite docs (missing means the default). */
@@ -39,6 +41,12 @@ export interface Invite {
   orgName: string;
   canPublish?: boolean;
   canDelete?: boolean;
+  servers?: string[] | null;
+}
+
+/** Server ids a member may use, or null for all. Owners and admins always have all. */
+export function serversFor(role: Role, data: { servers?: string[] | null }): string[] | null {
+  return role === "owner" || role === "admin" ? null : Array.isArray(data.servers) ? data.servers : null;
 }
 
 /** Effective permissions for a role plus stored flags. */
@@ -82,6 +90,8 @@ export const canManage = computed(
   () => isGuest.value || activeRole.value === "owner" || activeRole.value === "admin"
 );
 const activeMembership = computed(() => memberships.value.find((m) => m.orgId === activeOrgId.value));
+/** Servers the user may use in the active org, or null for all (guests: all). */
+export const serverAccess = computed<string[] | null>(() => (isGuest.value ? null : activeMembership.value?.servers ?? null));
 /** May publish and update messages on Discord (guests always can). */
 export const canPublish = computed(() => isGuest.value || !!activeMembership.value?.canPublish);
 /** May delete messages from Discord and remove published ones (guests always can). */
@@ -220,7 +230,7 @@ onAuthStateChanged(auth, (u) => {
           .filter((d) => !d.metadata.hasPendingWrites)
           .map((d) => {
             const role = d.data().role as Role;
-            return { orgId: d.ref.parent.parent!.id, role, ...permissionsFor(role, d.data()) };
+            return { orgId: d.ref.parent.parent!.id, role, ...permissionsFor(role, d.data()), servers: serversFor(role, d.data()) };
           });
         membershipsReady.value = true;
         watchOrgNames(memberships.value.map((m) => m.orgId));
@@ -275,6 +285,7 @@ export async function acceptInvite(invite: Invite) {
     // Copied exactly from the invite; the rules check they match.
     canPublish: invite.canPublish ?? true,
     canDelete: invite.canDelete ?? false,
+    ...(Array.isArray(invite.servers) && { servers: invite.servers }),
   });
   batch.delete(doc(db, "orgs", invite.orgId, "invites", invite.email));
   await batch.commit();

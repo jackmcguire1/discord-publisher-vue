@@ -1,5 +1,7 @@
 import { watch } from "vue";
+import { where } from "firebase/firestore";
 import { orgCollection } from "./orgCollection";
+import { serverAccess } from "./session";
 import { settings } from "./settings";
 import { parseWebhookUrl } from "../discord/webhook";
 
@@ -18,7 +20,16 @@ export interface SavedWebhook {
   createdAt: string;
 }
 
-const store = orgCollection<SavedWebhook>("webhooks");
+// Members limited to some servers may only read those servers' webhooks, so
+// they ask for exactly those (the rules refuse a broader query).
+const store = orgCollection<SavedWebhook>("webhooks", {
+  constraints: () => {
+    const access = serverAccess.value;
+    if (access === null) return [];
+    return access.length ? [where("serverId", "in", access)] : null;
+  },
+  constraintsKey: () => JSON.stringify(serverAccess.value),
+});
 export const savedWebhooks = store.items;
 
 export function getWebhook(id: string | null | undefined): SavedWebhook | undefined {

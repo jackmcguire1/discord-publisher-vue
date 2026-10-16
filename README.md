@@ -161,11 +161,11 @@ Load the draft (or just stay on it), make your changes, and click **Update publi
 | ------ | ------------------------------------------------------------------------------------------ |
 | Owner  | Everything an admin can, plus handing ownership to someone else. There is exactly one; the owner can't be removed or leave without first transferring ownership. |
 | Admin  | Add, edit and delete webhooks and servers. Invite and remove people, change member roles. Delete the organization. |
-| Member | Add and edit authors and drafts, and leave the organization. Plus, per member: **Publish & edit** (publish and update messages on Discord, on by default) and **Delete** (delete messages from Discord and remove published ones from the history, off by default). |
+| Member | Add and edit authors and drafts, and leave the organization. Plus, per member: **Publish & edit** (publish and update messages on Discord, on by default) and **Delete** (delete messages from Discord and remove published ones from the history, off by default). Plus **server access**: all servers (default) or a chosen list; a limited member only receives the webhooks filed under their servers. |
 
 Invites are addressed to an email and are **not emailed**. The invitee sees the invitation when they sign in with exactly that address (a `+tag` counts: `you+a@gmail.com` and `you+b@gmail.com` are different), and joins with the invited role. Use **Copy invite link** next to a pending invite and send it to them yourself: it opens sign-in with their address filled in. Admins can revoke an invite that hasn't been accepted.
 
-Admins set a member's permissions in **Settings → Members**, or when inviting them. These permissions are enforced by the Firestore security rules (`firebase/firestore.rules`) for the organization's records, not just hidden in the UI. Because the browser calls Discord directly and members can read webhook URLs, a determined member could still call Discord themselves; fully enforcing publish/delete would need server-side code (Cloud Functions).
+Admins set a member's permissions and server access in **Settings → Members**, or when inviting them. Server access is enforced by the rules on the webhooks themselves, so a limited member's browser never receives the URLs (and tokens) of other servers' webhooks; webhooks not filed under a server need access to all servers. These permissions are enforced by the Firestore security rules (`firebase/firestore.rules`) for the organization's records, not just hidden in the UI. Because the browser calls Discord directly and members can read webhook URLs, a determined member could still call Discord themselves; fully enforcing publish/delete would need server-side code (Cloud Functions).
 
 ## Discord limits enforced
 
@@ -258,7 +258,7 @@ Firestore layout:
 
 ```
 orgs/{orgId}                  name, ownerUid
-├─ members/{uid}              uid, email, role (owner | admin | member)
+├─ members/{uid}              uid, email, role (owner | admin | member), canPublish, canDelete, servers
 ├─ invites/{email}            email, role, orgName, invitedBy
 ├─ webhooks/{id}              name, description, url, serverId
 ├─ servers/{id}               name, guildId
@@ -360,6 +360,9 @@ You opened it in a different browser from the one you requested it in. Enter the
 
 **An invited person sees "Create an organization" instead of the invite**
 They signed in with a different address from the one invited; the welcome screen shows which one. Send them the invite link, or revoke and re-invite the address they used.
+
+**The webhook fields are empty after switching organization or signing in/out**
+That's deliberate: the selected webhook, URL and thread belong to one organization, so they're cleared when you switch, rather than left pointing at another org's webhook. Reloading in the same organization keeps them.
 
 **Sign-in emails stop arriving (`auth/quota-exceeded`)**
 Firebase limits email-link sign-in emails per project: 25,000 a day on Blaze, only 5 on the free Spark plan. Check which plan the project is on, and wait until the next day if the limit was hit.

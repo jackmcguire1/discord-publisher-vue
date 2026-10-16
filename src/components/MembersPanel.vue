@@ -8,19 +8,25 @@ import {
   revokeInvite,
   setMemberRole,
   setMemberPermissions,
+  setMemberServers,
   removeMember,
   transferOwnership,
   type Member,
 } from "../stores/org";
 import type { Permissions } from "../stores/session";
+import ServerAccessPicker from "./ServerAccessPicker.vue";
+import { allServers } from "../stores/servers";
 import { toast } from "../stores/toasts";
 
-const invite = ref<{ email: string; role: "admin" | "member"; canPublish: boolean; canDelete: boolean }>({
+const invite = ref<{ email: string; role: "admin" | "member"; canPublish: boolean; canDelete: boolean; servers: string[] | null }>({
   email: "",
   role: "member",
   canPublish: true,
   canDelete: false,
+  servers: null,
 });
+/** Member whose server access is being edited. */
+const editingAccess = ref<string | null>(null);
 
 async function attempt(fn: () => Promise<unknown>, ok: string | null, fail: string) {
   try {
@@ -41,8 +47,9 @@ async function sendInvite() {
     return;
   }
   const perms = { canPublish: invite.value.canPublish, canDelete: invite.value.canDelete };
-  if (await attempt(() => inviteMember(email, invite.value.role, perms), null, "Could not invite")) {
+  if (await attempt(() => inviteMember(email, invite.value.role, perms, invite.value.servers), null, "Could not invite")) {
     invite.value.email = "";
+    invite.value.servers = null;
     toast("success", "Invite created", `No email is sent. Copy the invite link and send it to ${email}, or ask them to sign in with exactly that address.`, 10000);
   }
 }
@@ -68,10 +75,21 @@ function togglePermission(m: Member, key: keyof Permissions, e: Event) {
 }
 
 /** Short label for what someone may do with messages. */
-function permissionSummary(p: { role: string; canPublish?: boolean; canDelete?: boolean }) {
+function saveServers(m: Member, servers: string[] | null) {
+  attempt(() => setMemberServers(m.uid, servers), null, "Could not change server access");
+}
+
+function serverSummary(servers: string[] | null | undefined): string {
+  if (!Array.isArray(servers)) return "all servers";
+  if (!servers.length) return "no servers";
+  const names = servers.map((id) => allServers.value.find((s) => s.id === id)?.name).filter(Boolean);
+  return names.length ? names.join(", ") : "no servers";
+}
+
+function permissionSummary(p: { role: string; canPublish?: boolean; canDelete?: boolean; servers?: string[] | null }) {
   if (p.role !== "member") return "all permissions";
   const can = [p.canPublish !== false && "publish", p.canDelete === true && "delete"].filter(Boolean);
-  return can.length ? `can ${can.join(" and ")}` : "drafts only";
+  return `${can.length ? `can ${can.join(" and ")}` : "drafts only"} · ${serverSummary(p.servers)}`;
 }
 
 function makeOwner(m: Member) {
@@ -92,7 +110,7 @@ function remove(m: Member) {
       <p class="muted small" style="margin: 0">
         Owners and admins manage webhooks, servers and people, and can do everything with messages. Every member can work on
         drafts and authors; whether a member can <strong>publish &amp; edit</strong> messages on Discord, and
-        <strong>delete</strong> them, is set per member.
+        <strong>delete</strong> them, is set per member, as is which <strong>servers</strong> (and so which webhooks) they can use.
       </p>
       <div class="draft-list">
         <div v-for="m in members" :key="m.uid" class="draft member-item">
@@ -100,6 +118,10 @@ function remove(m: Member) {
             <span class="draft-name">{{ m.email }}</span>
             <span v-if="m.uid === user?.uid" class="tag" style="margin-left: 8px">you</span>
             <div class="draft-meta member-permissions">{{ permissionSummary(m) }}</div>
+            <div v-if="editingAccess === m.uid" class="member-access">
+              <span class="muted small">Can use webhooks of:</span>
+              <ServerAccessPicker :model-value="m.servers" @update:model-value="saveServers(m, $event)" />
+            </div>
           </div>
           <div class="row row-nowrap">
             <template v-if="canManage && m.role === 'member' && m.uid !== user?.uid">
@@ -109,6 +131,13 @@ function remove(m: Member) {
               <label class="checkbox small perm-delete">
                 <input type="checkbox" :checked="m.canDelete" @change="togglePermission(m, 'canDelete', $event)" /> Delete
               </label>
+              <button
+                class="btn btn-sm btn-ghost member-servers"
+                :aria-expanded="editingAccess === m.uid"
+                @click="editingAccess = editingAccess === m.uid ? null : m.uid"
+              >
+                Servers
+              </button>
             </template>
             <select
               v-if="canManage && m.role !== 'owner' && m.uid !== user?.uid"
@@ -166,6 +195,10 @@ function remove(m: Member) {
           <span class="muted small">New member can:</span>
           <label class="checkbox small"><input v-model="invite.canPublish" type="checkbox" class="invite-can-publish" /> Publish &amp; edit</label>
           <label class="checkbox small"><input v-model="invite.canDelete" type="checkbox" class="invite-can-delete" /> Delete</label>
+        </div>
+        <div v-if="invite.role === 'member'" class="row invite-servers">
+          <span class="muted small">Servers:</span>
+          <ServerAccessPicker v-model="invite.servers" />
         </div>
       </section>
     </template>
