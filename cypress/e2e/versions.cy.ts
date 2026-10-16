@@ -21,18 +21,20 @@ describe("message versions", () => {
   it("each save is a revision; old ones can be previewed and restored", () => {
     cy.visitClean();
     cy.window().then((w) => cy.stub(w, "prompt").returns("Notes"));
+    // History lives in the Message panel; it waits for the first save.
+    cy.get(".message-panel .editor-history").should("be.disabled");
     content().type("First version", { delay: 0 });
     cy.contains("button", "Save draft").click();
-    cy.get(".editor-history").should("contain.text", "v1");
+    cy.get(".message-panel .revision-tag").should("have.text", "v1");
 
     content().clear().type("Second version", { delay: 0 });
     cy.contains("button", "Update draft").click();
-    cy.get(".editor-history").should("contain.text", "v2");
+    cy.get(".message-panel .revision-tag").should("have.text", "v2");
 
     // Saving without changes doesn't add an empty revision.
     cy.contains("button", "Update draft").click();
     cy.toast("No changes to save");
-    cy.get(".editor-history").should("contain.text", "v2");
+    cy.get(".message-panel .revision-tag").should("have.text", "v2");
 
     cy.get(".editor-history").click();
     cy.get(".revision-item").should("have.length", 2);
@@ -45,9 +47,17 @@ describe("message versions", () => {
     cy.get(".editing-name").should("contain.text", "unsaved changes");
 
     cy.contains("button", "Update draft").click();
-    cy.get(".editor-history").should("contain.text", "v3").click();
+    cy.get(".message-panel .revision-tag").should("have.text", "v3");
+    cy.get(".editor-history").click();
     cy.get(".revision-item").should("have.length", 3);
     revisionDocs().should("have.length", 3);
+
+    // Saved versions can be deleted (Cypress accepts the confirm).
+    cy.get('.revision-item[data-revision="2"] .revision-delete').click();
+    cy.toast("Deleted v2");
+    cy.get(".revision-item").should("have.length", 2);
+    cy.get('.revision-item[data-revision="2"]').should("not.exist");
+    revisionDocs().should("have.length", 2);
   });
 
   it("publishing and updating on Discord are revisions too", () => {
@@ -56,13 +66,17 @@ describe("message versions", () => {
     cy.setWebhook();
     cy.contains("button", "Publish").click();
     cy.wait("@send");
-    cy.get(".editor-history").should("contain.text", "v1"); // one revision, not a save plus a publish
+    cy.get(".message-panel .revision-tag").should("have.text", "v1"); // one revision, not a save plus a publish
     content().type("Edited", { delay: 0 });
     cy.contains("button", "Update published").click();
     cy.wait("@edit");
-    cy.get(".editor-history").should("contain.text", "v2").click();
+    cy.get(".message-panel .revision-tag").should("have.text", "v2");
+    cy.get(".editor-history").click();
     cy.get('.revision-item[data-revision="1"]').should("contain.text", "Published to Discord");
     cy.get('.revision-item[data-revision="2"]').should("contain.text", "Updated on Discord");
+    // What went out to Discord can't be deleted.
+    cy.get(".revision-delete").should("not.exist");
+    cy.get(".revision-locked").should("have.length", 2);
     revisionDocs().should("have.length", 2);
   });
 
@@ -84,7 +98,8 @@ describe("message versions", () => {
     cy.contains("button", "Save draft").click();
     content().type(" two", { delay: 0 });
     cy.contains("button", "Update draft").click();
-    cy.get(".editor-history").should("contain.text", "v2").click();
+    cy.get(".message-panel .revision-tag").should("have.text", "v2");
+    cy.get(".editor-history").click();
     cy.get(".revision-item").should("have.length", 2);
     cy.get("body").type("{esc}");
 

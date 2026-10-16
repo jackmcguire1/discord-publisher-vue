@@ -1,4 +1,4 @@
-import { collection, doc, getDocs, setDoc, writeBatch } from "firebase/firestore";
+import { collection, deleteDoc, doc, getDocs, setDoc, writeBatch } from "firebase/firestore";
 import { db } from "../firebase";
 import { activeOrgId, isGuest } from "./session";
 import { load, save } from "./persist";
@@ -62,6 +62,18 @@ export async function listRevisions(draftId: string): Promise<Revision[]> {
     list = snap.docs.map((d) => ({ ...(d.data() as Omit<Revision, "id">), id: d.id }));
   }
   return [...list].sort((a, b) => b.number - a.number || b.createdAt.localeCompare(a.createdAt));
+}
+
+/** Delete one saved revision. Published/updated ones are kept as the record of what went to Discord. */
+export async function deleteRevision(draftId: string, rev: Revision) {
+  if (rev.kind !== "saved") throw new Error("Published versions can't be deleted");
+  if (isGuest.value) {
+    const all = load<GuestRevisions>(GUEST_KEY, {});
+    all[draftId] = (all[draftId] ?? []).filter((r) => r.id !== rev.id);
+    save(GUEST_KEY, all);
+    return;
+  }
+  await deleteDoc(doc(col(draftId), rev.id));
 }
 
 /** Remove every revision of a message (Firestore doesn't cascade when the message is deleted). */

@@ -75,7 +75,7 @@ Live site: **https://jackmcguire1.github.io/discord-publisher-vue/**
 - Every publish is recorded with who published it, when, through which webhook, and who last updated it. Deleting from Discord keeps the message as history (marked deleted) instead of losing it; publishing it again creates a new message.
 - **Load** on a published message selects the webhook it went through and pulls its current content from Discord, ready to update or delete.
 - **+ New message** (editor header, Messages page) starts a blank message, keeping your webhook identity and selected webhook. If the editor has unsaved changes it asks first: save as a draft, discard, or cancel. The header shows the message you're editing and whether it has unsaved changes.
-- **Versions**: every save, publish and Discord update is kept as a numbered revision (v1, v2, …) with who made it and when. **History** (in the Messages list, or the `vN · History` button in the editor header) lists them with a preview of each; **Restore** opens an old version in the editor as unsaved changes, so saving or updating records it as a new revision and nothing is lost. Duplicates start their own history.
+- **Versions**: every save, publish and Discord update is kept as a numbered revision (v1, v2, …) with who made it and when. **History** (in the Messages list, or the `vN · History` button in the editor header) lists them with a preview of each; **Restore** opens an old version in the editor as unsaved changes, so saving or updating records it as a new revision and nothing is lost. Saved versions can be deleted from History; versions that were published or updated on Discord can't, and stay as the record of what went out. Duplicates start their own history.
 - Save, rename, duplicate, delete, export and import drafts.
 - Publishing automatically creates a draft if you have not saved one, so every send is tracked.
 - Drafts record when they were last updated and when and where they were published.
@@ -126,6 +126,9 @@ Guests and organization admins add webhooks: in the editor, click **Manage** nex
 If you publish to more than one Discord server, add each one under **Servers** in the same dialog and assign webhooks to it. The dropdown then groups webhooks by server, and drafts are filed under the server they were published to. Adding the Discord server ID (Server Settings → Widget, or right-click the server with developer mode on) is optional but makes the "open in Discord" links resolve directly.
 
 ### 3. Build the message
+
+The editor has two panels. **Publish** is where the message goes: webhook, thread and URL, plus Publish, Update and Delete. **Message** is the message itself: its header shows the name, version and whether there are unsaved changes, with **History**, **Messages** and **+ New message**; below it a toolbar groups Undo/Redo, JSON/cURL, Authors and saving.
+
 
 If you post as the same brand each time, open **Authors** in the toolbar and save its name, link and avatar. The author dropdown above the webhook identity fields fills in username and avatar; the one in each embed's Author section fills in name, link and icon. The list shows each author's avatar, and the dropdown keeps showing which author is in use for as long as the fields still match it. Both places also offer **Save as author…** once you have typed something.
 

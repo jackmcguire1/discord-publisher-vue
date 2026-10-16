@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from "vue";
 import Modal from "./Modal.vue";
 import MessagePreview from "./MessagePreview.vue";
-import { listRevisions, type Revision, type RevisionKind } from "../stores/revisions";
+import { listRevisions, deleteRevision, type Revision, type RevisionKind } from "../stores/revisions";
 import { getDraft } from "../stores/drafts";
 import { currentDraftId, isDirty, replaceMessage, markCleanAs } from "../stores/message";
 import { historyFor, selectWebhookFor } from "../stores/editorActions";
@@ -46,6 +46,18 @@ function summary(r: Revision): string {
 
 function close() {
   historyFor.value = null;
+}
+
+async function remove(r: Revision) {
+  if (!confirm(`Delete v${r.number}? The other versions and the message itself aren't affected.`)) return;
+  try {
+    await deleteRevision(draftId, r);
+    revisions.value = revisions.value.filter((x) => x.id !== r.id);
+    if (previewing.value === r.id) previewing.value = null;
+    toast("success", `Deleted v${r.number}`);
+  } catch (e) {
+    toast("error", "Could not delete version", (e as Error).message);
+  }
 }
 
 function restore(r: Revision) {
@@ -94,6 +106,13 @@ function restore(r: Revision) {
               {{ previewing === r.id ? "Hide" : "Preview" }}
             </button>
             <button class="btn btn-sm btn-primary revision-restore" @click="restore(r)">Restore</button>
+            <button
+              v-if="r.kind === 'saved'"
+              class="btn btn-sm btn-danger revision-delete"
+              title="Delete this version"
+              @click="remove(r)"
+            >✕</button>
+            <span v-else class="btn btn-sm btn-ghost revision-locked" title="Versions that went out to Discord are kept as a record" aria-disabled="true">🔒</span>
           </div>
         </div>
       </div>

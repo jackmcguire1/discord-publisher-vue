@@ -413,3 +413,31 @@ select.nav-org option { background: var(--bg-1); color: var(--text); }
 .page .card-body { border-top: none; padding: 20px; }
 
 .revision-preview { margin-top: 10px; padding: 10px; border-radius: var(--radius); background: var(--bg-2); border: 1px solid var(--border); }
+
+/* ---- editor panels -------------------------------------------------------- */
+
+.panel { background: var(--bg-1); border: 1px solid var(--border); border-radius: 8px; }
+.panel-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;
+  padding: 10px 12px; border-bottom: 1px solid var(--border);
+}
+.panel-heading { display: flex; align-items: baseline; gap: 8px; min-width: 0; flex: 1 1 200px; }
+.panel-title { margin: 0; color: var(--text-strong); font-size: 13px; }
+.editing-name, .editing-meta {
+  color: var(--text-muted); font-size: 13px; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.panel-heading .tag { align-self: center; flex: none; }
+.panel-actions { flex: none; }
+.panel-body { padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+
+.toolbar {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--bg-2);
+}
+.toolbar-spacer { flex: 1; }
+.btn-group { display: inline-flex; }
+.btn-group > .btn { border-radius: 0; }
+.btn-group > .btn:first-child { border-radius: var(--radius) 0 0 var(--radius); }
+.btn-group > .btn:last-child { border-radius: 0 var(--radius) var(--radius) 0; }
+.btn-group > .btn + .btn { margin-left: -1px; }

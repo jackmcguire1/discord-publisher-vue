@@ -31,7 +31,6 @@ function inputValue(e: Event) { return (e.target as HTMLInputElement).value; }
     </section>
 
     <section>
-      <h2>Message</h2>
       <Field label="Content" :error="errorAt('content')" :count="message.content.length" :max="2000">
         <textarea v-model="message.content" class="input" rows="4" placeholder="Supports Discord markdown: **bold**, *italic*, `code`, > quotes, ||spoilers||, <t:timestamps>" />
       </Field>

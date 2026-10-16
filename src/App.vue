@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from "vue";
-import { message, currentDraftId, undo, redo, isDirty } from "./stores/message";
-import { getDraft } from "./stores/drafts";
+import { ref, watch, onMounted, onUnmounted } from "vue";
+import { message, undo, redo } from "./stores/message";
 import Toolbar from "./components/Toolbar.vue";
 import PublishPanel from "./components/PublishPanel.vue";
 import MessageEditor from "./components/MessageEditor.vue";
@@ -34,13 +33,12 @@ import { toast } from "./stores/toasts";
 import { hasLegacyData } from "./stores/legacy";
 import { isDismissed, dismiss } from "./stores/dismissed";
 import NewMessageDialog from "./components/NewMessageDialog.vue";
-import { newMessageDialog, requestNewMessage, historyFor, openHistory } from "./stores/editorActions";
+import { newMessageDialog, historyFor } from "./stores/editorActions";
 import HistoryModal from "./components/HistoryModal.vue";
 import { route, href } from "./router";
 
 type View = "json" | "curl" | "drafts" | "webhooks" | null;
 const view = ref<View>(null);
-const draft = computed(() => getDraft(currentDraftId.value));
 
 function onKey(e: KeyboardEvent) {
   const target = e.target as HTMLElement | null;
@@ -95,21 +93,13 @@ onUnmounted(() => window.removeEventListener("keydown", onKey));
             <a class="btn btn-sm" :href="href('/settings/general')">Import…</a>
             <button class="banner-close" aria-label="Dismiss" title="Dismiss" @click="dismiss('legacy-import', { persist: false })">✕</button>
           </div>
-          <div class="row row-between">
-            <div class="row">
-              <h2 style="margin: 0">Message</h2>
-              <span v-if="draft" class="muted small editing-name">{{ draft.name }}<template v-if="isDirty"> · unsaved changes</template></span>
-              <span v-else class="muted small editing-name">Not saved yet</span>
-              <button v-if="draft?.revision" class="btn btn-ghost btn-sm editor-history" title="Revision history" @click="openHistory(draft.id)">
-                v{{ draft.revision }} · History
-              </button>
-            </div>
-            <button class="btn btn-primary btn-sm new-message" title="Start a blank message" @click="requestNewMessage()">+ New message</button>
-          </div>
           <PublishPanel @manage="view = 'webhooks'" />
-          <Toolbar @open="view = $event" />
-          <hr class="divider" />
-          <MessageEditor />
+          <section class="panel message-panel">
+            <Toolbar @open="view = $event" />
+            <div class="panel-body">
+              <MessageEditor />
+            </div>
+          </section>
         </div>
       </div>
 

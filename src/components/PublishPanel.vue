@@ -132,8 +132,14 @@ async function remove() {
 </script>
 
 <template>
-  <section class="card">
-    <div class="card-body" style="border-top: none">
+  <section class="panel publish-panel">
+    <header class="panel-header">
+      <div class="panel-heading">
+        <h2 class="panel-title">Publish</h2>
+        <span class="editing-meta">Where this message goes on Discord</span>
+      </div>
+    </header>
+    <div class="panel-body">
       <div class="publish-grid">
         <Field label="Webhook" :hint="[selectedServer?.name, selected?.description].filter(Boolean).join(' · ') || (savedWebhooks.length ? `${savedWebhooks.length} saved` : 'none saved yet')">
           <div class="row row-nowrap">

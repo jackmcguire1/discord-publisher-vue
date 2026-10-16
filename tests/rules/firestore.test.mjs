@@ -339,6 +339,14 @@ describe("message revisions", () => {
     await assertFails(updateDoc(revDoc(as("admin")), { message: { content: "changed" } }));
   });
 
+  it("any member deletes a saved version; published ones stay unless the message goes", async () => {
+    const published = { ...draft, published: { messageId: "m", channelId: "c", webhookId: "1", publishedAt: now } };
+    await seed(published, { r1: rev("member", "saved"), r2: rev("member", "published", { number: 2 }) });
+    await assertSucceeds(deleteDoc(revDoc(as("viewer"), "r1")));
+    await assertFails(deleteDoc(revDoc(as("member"), "r2")));
+    await assertFails(deleteDoc(revDoc(as("outsider"), "r2")));
+  });
+
   it("revisions are removed with their message, under the same permission", async () => {
     await seed(draft, { r1: rev("member", "saved") });
     await assertSucceeds(deleteDoc(revDoc(as("viewer")))); // plain draft: any member
