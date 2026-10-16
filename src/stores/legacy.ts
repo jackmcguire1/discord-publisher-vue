@@ -2,7 +2,7 @@ import { ref, computed, watch } from "vue";
 import { doc, writeBatch } from "firebase/firestore";
 import { db } from "../firebase";
 import { load } from "./persist";
-import { activeOrgId, canManage, user } from "./session";
+import { activeOrgId, canManage, canPublish, canDelete, user } from "./session";
 
 // Guests (and everyone before Firebase) keep webhooks, servers, authors and
 // drafts in this browser's localStorage. Once signed in, this offers a copy
@@ -40,7 +40,10 @@ export async function importLegacyData(): Promise<number> {
   const orgId = activeOrgId.value;
   if (!orgId) throw new Error("No organization selected");
   const keys = KEYS.filter((k) => canManage.value || !ADMIN_ONLY.includes(k));
-  const writes = keys.flatMap((k) => legacy.value[k].map((item) => ({ k, item })));
+  // Published or deleted messages need the matching permission, or the whole batch is refused.
+  const allowed = (k: Key, item: Record<string, unknown>) =>
+    k !== "drafts" || ((!item.published || canPublish.value) && (!item.deleted || canDelete.value));
+  const writes = keys.flatMap((k) => legacy.value[k].filter((item) => allowed(k, item)).map((item) => ({ k, item })));
 
   // Firestore batches cap at 500 writes.
   for (let i = 0; i < writes.length; i += 400) {

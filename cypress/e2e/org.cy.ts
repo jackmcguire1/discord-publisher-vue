@@ -105,7 +105,7 @@ describe("sign-in and organizations", () => {
     cy.contains(".nav-link", "Editor").click();
     cy.get(".legacy-banner").should("not.exist");
     cy.get("select.webhook-select").find("option").should("contain.text", "Old hook");
-    cy.openModal("Drafts");
+    cy.openModal("Messages");
     cy.get(".draft-name").should("have.text", "Old draft");
   });
 });

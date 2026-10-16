@@ -1,10 +1,16 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { user, activeOrgName, canManage, inviteLink } from "../stores/session";
-import { members, pendingInvites, inviteMember, revokeInvite, setMemberRole, removeMember, type Member } from "../stores/org";
+import { members, pendingInvites, inviteMember, revokeInvite, setMemberRole, setMemberPermissions, removeMember, type Member } from "../stores/org";
+import type { Permissions } from "../stores/session";
 import { toast } from "../stores/toasts";
 
-const invite = ref<{ email: string; role: "admin" | "member" }>({ email: "", role: "member" });
+const invite = ref<{ email: string; role: "admin" | "member"; canPublish: boolean; canDelete: boolean }>({
+  email: "",
+  role: "member",
+  canPublish: true,
+  canDelete: false,
+});
 
 async function attempt(fn: () => Promise<unknown>, ok: string | null, fail: string) {
   try {
@@ -24,7 +30,8 @@ async function sendInvite() {
     toast("info", "Already a member", email);
     return;
   }
-  if (await attempt(() => inviteMember(email, invite.value.role), null, "Could not invite")) {
+  const perms = { canPublish: invite.value.canPublish, canDelete: invite.value.canDelete };
+  if (await attempt(() => inviteMember(email, invite.value.role, perms), null, "Could not invite")) {
     invite.value.email = "";
     toast("success", "Invite created", `No email is sent. Copy the invite link and send it to ${email}, or ask them to sign in with exactly that address.`, 10000);
   }
@@ -45,6 +52,18 @@ function changeRole(m: Member, e: Event) {
   attempt(() => setMemberRole(m.uid, role), null, "Could not change role");
 }
 
+function togglePermission(m: Member, key: keyof Permissions, e: Event) {
+  const value = (e.target as HTMLInputElement).checked;
+  attempt(() => setMemberPermissions(m.uid, { [key]: value }), null, "Could not change permissions");
+}
+
+/** Short label for what someone may do with messages. */
+function permissionSummary(p: { role: string; canPublish?: boolean; canDelete?: boolean }) {
+  if (p.role !== "member") return "all permissions";
+  const can = [p.canPublish !== false && "publish", p.canDelete === true && "delete"].filter(Boolean);
+  return can.length ? `can ${can.join(" and ")}` : "drafts only";
+}
+
 function remove(m: Member) {
   if (!confirm(`Remove ${m.email} from ${activeOrgName.value}?`)) return;
   attempt(() => removeMember(m.uid), "Member removed", "Could not remove member");
@@ -56,15 +75,26 @@ function remove(m: Member) {
     <section class="stack" style="--gap: 8px">
       <h2 style="margin: 0">Members <span class="muted" style="font-weight: 400">{{ members.length }}</span></h2>
       <p class="muted small" style="margin: 0">
-        Owners and admins manage webhooks, servers and people. Members publish with the shared webhooks and work on authors and drafts.
+        Owners and admins manage webhooks, servers and people, and can do everything with messages. Every member can work on
+        drafts and authors; whether a member can <strong>publish &amp; edit</strong> messages on Discord, and
+        <strong>delete</strong> them, is set per member.
       </p>
       <div class="draft-list">
         <div v-for="m in members" :key="m.uid" class="draft member-item">
           <div class="grow">
             <span class="draft-name">{{ m.email }}</span>
             <span v-if="m.uid === user?.uid" class="tag" style="margin-left: 8px">you</span>
+            <div class="draft-meta member-permissions">{{ permissionSummary(m) }}</div>
           </div>
           <div class="row row-nowrap">
+            <template v-if="canManage && m.role === 'member' && m.uid !== user?.uid">
+              <label class="checkbox small perm-publish">
+                <input type="checkbox" :checked="m.canPublish" @change="togglePermission(m, 'canPublish', $event)" /> Publish &amp; edit
+              </label>
+              <label class="checkbox small perm-delete">
+                <input type="checkbox" :checked="m.canDelete" @change="togglePermission(m, 'canDelete', $event)" /> Delete
+              </label>
+            </template>
             <select
               v-if="canManage && m.role !== 'owner' && m.uid !== user?.uid"
               class="input member-role"
@@ -95,6 +125,7 @@ function remove(m: Member) {
             <div class="grow">
               <span class="draft-name">{{ i.email }}</span>
               <span class="tag" style="margin-left: 8px">{{ i.role }}</span>
+              <div class="draft-meta">{{ permissionSummary(i) }}</div>
             </div>
             <div class="row row-nowrap">
               <button class="btn btn-sm copy-invite" @click="copyLink(i.email)">Copy invite link</button>
@@ -110,6 +141,11 @@ function remove(m: Member) {
           </select>
           <button type="submit" class="btn btn-primary btn-sm" :disabled="!invite.email.trim()">Invite</button>
         </form>
+        <div v-if="invite.role === 'member'" class="row invite-permissions">
+          <span class="muted small">New member can:</span>
+          <label class="checkbox small"><input v-model="invite.canPublish" type="checkbox" class="invite-can-publish" /> Publish &amp; edit</label>
+          <label class="checkbox small"><input v-model="invite.canDelete" type="checkbox" class="invite-can-delete" /> Delete</label>
+        </div>
       </section>
     </template>
   </div>

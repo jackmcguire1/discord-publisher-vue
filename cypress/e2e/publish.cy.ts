@@ -34,7 +34,7 @@ describe("publishing", () => {
       .should("have.attr", "href")
       .and("include", "/555666777888999000/999000111222333444");
     cy.contains("Draft:").should("contain.text", "v1.8.2");
-    cy.contains("button", "Drafts").find(".tag").should("have.text", "1");
+    cy.contains("button", "Messages").find(".tag").should("have.text", "1");
   });
 
   it("includes the thread id when set", () => {

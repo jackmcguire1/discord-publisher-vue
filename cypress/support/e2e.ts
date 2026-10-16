@@ -29,7 +29,7 @@ declare global {
       /** Open the navbar account menu and click an item by label. */
       accountMenu(item: string): Chainable<void>;
       /** Open a toolbar modal by its button label. */
-      openModal(label: "JSON" | "cURL" | "Drafts"): Chainable<void>;
+      openModal(label: "JSON" | "cURL" | "Messages"): Chainable<void>;
       /** Assert a toast with the given title is showing. */
       toast(title: string): Chainable<JQuery<HTMLElement>>;
     }
@@ -84,6 +84,8 @@ Cypress.Commands.add("stubDiscord", () => {
   cy.intercept("POST", WEBHOOK_RE, { statusCode: 200, body: message }).as("send");
   cy.intercept("PATCH", WEBHOOK_RE, { statusCode: 200, body: message }).as("edit");
   cy.intercept("DELETE", WEBHOOK_RE, { statusCode: 204, body: "" }).as("delete");
+  // Loading a published message pulls its current content from Discord.
+  cy.intercept("GET", WEBHOOK_RE, { statusCode: 200, body: { ...message, content: "Live from Discord", embeds: [] } }).as("fetch");
 });
 
 Cypress.Commands.add("setWebhook", (url = WEBHOOK) => {

@@ -27,6 +27,8 @@ const people = {
   member: { uid: "member", email: "member@example.com" },
   outsider: { uid: "outsider", email: "outsider@example.com" },
   invitee: { uid: "invitee", email: "invitee@example.com" },
+  viewer: { uid: "viewer", email: "viewer@example.com" },
+  deleter: { uid: "deleter", email: "deleter@example.com" },
 };
 
 /** Firestore as a signed-in user with a verified email (as email-link sign-in gives). */
@@ -53,6 +55,9 @@ beforeEach(async () => {
       const p = people[role];
       await setDoc(doc(db, "orgs", ORG, "members", p.uid), { uid: p.uid, email: p.email, role, joinedAt: now });
     }
+    // Members with explicit permissions: one who may not publish, one who may delete.
+    await setDoc(doc(db, "orgs", ORG, "members", "viewer"), { uid: "viewer", email: people.viewer.email, role: "member", joinedAt: now, canPublish: false, canDelete: false });
+    await setDoc(doc(db, "orgs", ORG, "members", "deleter"), { uid: "deleter", email: people.deleter.email, role: "member", joinedAt: now, canPublish: true, canDelete: true });
     await setDoc(doc(db, "orgs", ORG, "webhooks", "w1"), { name: "Hook", description: "", url: WEBHOOK_URL, serverId: null, createdAt: now });
     await setDoc(doc(db, "orgs", ORG, "invites", people.invitee.email), {
       email: people.invitee.email,
@@ -237,5 +242,69 @@ describe("deleting an org", () => {
   it("the deleting flag can't be smuggled in with a rename", async () => {
     await assertFails(updateDoc(doc(as("admin"), "orgs", ORG), { name: "X", deleting: true }));
     await assertFails(updateDoc(doc(as("admin"), "orgs", ORG), { deleting: false }));
+  });
+});
+
+describe("messages: publish and delete permissions", () => {
+  const ref = { messageId: "m1", channelId: "c1", webhookId: "123", publishedAt: now };
+  const draft = { name: "D", createdAt: now, updatedAt: now, serverId: null, message: { content: "hi", embeds: [] } };
+  const published = { ...draft, published: ref };
+
+  async function seed(data) {
+    await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), "orgs", ORG, "drafts", "d1"), data));
+  }
+
+  it("every member edits and removes plain drafts", async () => {
+    await assertSucceeds(setDoc(doc(as("viewer"), "orgs", ORG, "drafts", "d1"), draft));
+    await assertSucceeds(updateDoc(doc(as("viewer"), "orgs", ORG, "drafts", "d1"), { name: "Renamed" }));
+    await assertSucceeds(deleteDoc(doc(as("viewer"), "orgs", ORG, "drafts", "d1")));
+  });
+
+  it("publishing needs canPublish (on by default)", async () => {
+    await seed(draft);
+    await assertFails(updateDoc(doc(as("viewer"), "orgs", ORG, "drafts", "d1"), { published: ref }));
+    await assertSucceeds(updateDoc(doc(as("member"), "orgs", ORG, "drafts", "d1"), { published: ref }));
+    await assertFails(setDoc(doc(as("viewer"), "orgs", ORG, "drafts", "d2"), published));
+    await assertSucceeds(setDoc(doc(as("member"), "orgs", ORG, "drafts", "d2"), published));
+  });
+
+  it("updating a published message needs canPublish; editing its other fields doesn't", async () => {
+    await seed(published);
+    await assertFails(updateDoc(doc(as("viewer"), "orgs", ORG, "drafts", "d1"), { published: { ...ref, updatedAt: now } }));
+    await assertSucceeds(updateDoc(doc(as("viewer"), "orgs", ORG, "drafts", "d1"), { name: "Renamed" }));
+    await assertSucceeds(updateDoc(doc(as("member"), "orgs", ORG, "drafts", "d1"), { published: { ...ref, updatedAt: now } }));
+  });
+
+  it("deleting from Discord needs canDelete (off by default)", async () => {
+    await seed(published);
+    const markDeleted = { published: null, deleted: { ...ref, deletedAt: now } };
+    await assertFails(updateDoc(doc(as("member"), "orgs", ORG, "drafts", "d1"), markDeleted));
+    await assertFails(updateDoc(doc(as("member"), "orgs", ORG, "drafts", "d1"), { published: null }));
+    await assertSucceeds(updateDoc(doc(as("deleter"), "orgs", ORG, "drafts", "d1"), markDeleted));
+  });
+
+  it("removing a published or deleted message from the org needs canDelete", async () => {
+    await seed(published);
+    await assertFails(deleteDoc(doc(as("member"), "orgs", ORG, "drafts", "d1")));
+    await assertSucceeds(deleteDoc(doc(as("deleter"), "orgs", ORG, "drafts", "d1")));
+    await seed({ ...draft, deleted: { ...ref, deletedAt: now } });
+    await assertFails(deleteDoc(doc(as("member"), "orgs", ORG, "drafts", "d1")));
+    await assertSucceeds(deleteDoc(doc(as("admin"), "orgs", ORG, "drafts", "d1")));
+  });
+
+  it("admins set member permissions; members can't grant themselves any", async () => {
+    await assertSucceeds(updateDoc(doc(as("admin"), "orgs", ORG, "members", "member"), { canDelete: true }));
+    await assertFails(updateDoc(doc(as("viewer"), "orgs", ORG, "members", "viewer"), { canPublish: true }));
+    await assertFails(updateDoc(doc(as("admin"), "orgs", ORG, "members", "member"), { canDelete: "yes" }));
+  });
+
+  it("an invitee joins with exactly the invited permissions", async () => {
+    await env.withSecurityRulesDisabled((ctx) =>
+      updateDoc(doc(ctx.firestore(), "orgs", ORG, "invites", people.invitee.email), { canPublish: false, canDelete: false })
+    );
+    const member = { uid: "invitee", email: people.invitee.email, role: "member", joinedAt: now };
+    await assertFails(setDoc(doc(as("invitee"), "orgs", ORG, "members", "invitee"), { ...member, canPublish: true, canDelete: false }));
+    await assertFails(setDoc(doc(as("invitee"), "orgs", ORG, "members", "invitee"), member)); // missing flags default to publish=true
+    await assertSucceeds(setDoc(doc(as("invitee"), "orgs", ORG, "members", "invitee"), { ...member, canPublish: false, canDelete: false }));
   });
 });

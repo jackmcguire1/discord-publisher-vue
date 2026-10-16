@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { message, currentDraftId, undo, redo, canUndo, canRedo, replaceMessage } from "../stores/message";
-import { drafts, getDraft, createDraft, updateDraftMessage } from "../stores/drafts";
+import { drafts, getDraft, createDraft, updateDraftMessage, statusOf } from "../stores/drafts";
 import { emptyMessage } from "../discord/schema";
 import { selectedWebhookServerId } from "../stores/webhooks";
 import { openAuthors, savedAuthors } from "../stores/authors";
@@ -10,11 +10,13 @@ import { toast } from "../stores/toasts";
 const emit = defineEmits<{ open: [view: "json" | "curl" | "drafts"] }>();
 
 const draft = computed(() => getDraft(currentDraftId.value));
+/** Published and deleted messages are history; saving starts a new draft rather than changing them. */
+const editableDraft = computed(() => (draft.value && statusOf(draft.value) === "draft" ? draft.value : undefined));
 
 function saveDraft() {
-  if (draft.value) {
-    updateDraftMessage(draft.value.id, message.value);
-    toast("success", "Draft updated", draft.value.name);
+  if (editableDraft.value) {
+    updateDraftMessage(editableDraft.value.id, message.value);
+    toast("success", "Draft updated", editableDraft.value.name);
     return;
   }
   saveAsNew();
@@ -48,11 +50,11 @@ function clear() {
       <button class="btn btn-ghost btn-sm" @click="openAuthors()">
         Authors <span class="tag">{{ savedAuthors.length }}</span>
       </button>
-      <button class="btn btn-ghost btn-sm" @click="emit('open', 'drafts')">
-        Drafts <span class="tag">{{ drafts.length }}</span>
+      <button class="btn btn-ghost btn-sm" title="Drafts and published messages" @click="emit('open', 'drafts')">
+        Messages <span class="tag">{{ drafts.length }}</span>
       </button>
-      <button class="btn btn-sm" @click="saveDraft">{{ draft ? "Update draft" : "Save draft" }}</button>
-      <button v-if="draft" class="btn btn-ghost btn-sm" @click="saveAsNew">Save as new</button>
+      <button class="btn btn-sm" @click="saveDraft">{{ editableDraft ? "Update draft" : draft ? "Save as draft" : "Save draft" }}</button>
+      <button v-if="editableDraft" class="btn btn-ghost btn-sm" @click="saveAsNew">Save as new</button>
     </div>
   </div>
 </template>

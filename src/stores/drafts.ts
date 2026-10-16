@@ -1,23 +1,45 @@
 import { computed } from "vue";
 import { orgCollection } from "./orgCollection";
+import { myEmail } from "./session";
 import type { Message } from "../discord/schema";
 import { parseIncomingMessage } from "../discord/schema";
 import type { PublishedRef } from "../discord/webhook";
 
-// Drafts are shared with the active org (orgs/{orgId}/drafts). Each one remembers where it was last published
-// so it can be edited or deleted on Discord later. The webhook token is never
-// stored on a draft; only the webhook id, so we can tell whether the currently
-// configured webhook is the one that owns the published message.
+// Messages, shared with the active org (orgs/{orgId}/drafts; localStorage for
+// guests). One record follows a message through its life:
+//   draft      neither `published` nor `deleted`
+//   published  `published` holds the Discord reference and who published/updated it
+//   deleted    removed from Discord; `deleted` keeps that reference as history
+// The webhook token is never stored here, only the Discord webhook id (and the
+// saved webhook's id), so we can tell which webhook owns the message.
+
+export interface PublishInfo extends PublishedRef {
+  publishedAt: string;
+  publishedBy?: string;
+  updatedAt?: string;
+  updatedBy?: string;
+  /** Saved webhook it went through, if any. */
+  savedWebhookId?: string | null;
+}
 
 export interface Draft {
   id: string;
   name: string;
   createdAt: string;
   updatedAt: string;
+  createdBy?: string;
+  updatedBy?: string;
   message: Message;
   /** Server this draft is filed under, or null if unassigned. */
   serverId: string | null;
-  published?: PublishedRef & { publishedAt: string };
+  published?: PublishInfo;
+  deleted?: PublishInfo & { deletedAt: string; deletedBy?: string };
+}
+
+export type MessageStatus = "draft" | "published" | "deleted";
+
+export function statusOf(d: Draft): MessageStatus {
+  return d.published ? "published" : d.deleted ? "deleted" : "draft";
 }
 
 export interface DraftsFile {
@@ -46,7 +68,16 @@ export function getDraft(id: string | null): Draft | undefined {
 
 export function createDraft(name: string, message: Message, serverId: string | null = null): Draft {
   const now = new Date().toISOString();
-  const draft: Draft = { id: store.newId(), name: name.trim() || "Untitled", createdAt: now, updatedAt: now, message: clone(message), serverId };
+  const by = myEmail();
+  const draft: Draft = {
+    id: store.newId(),
+    name: name.trim() || "Untitled",
+    createdAt: now,
+    updatedAt: now,
+    message: clone(message),
+    serverId,
+    ...(by && { createdBy: by, updatedBy: by }),
+  };
   store.set(draft);
   return draft;
 }
@@ -54,7 +85,7 @@ export function createDraft(name: string, message: Message, serverId: string | n
 export function updateDraftMessage(id: string, message: Message): Draft | undefined {
   const d = getDraft(id);
   if (!d) return;
-  store.update(id, { message: clone(message), updatedAt: new Date().toISOString() });
+  store.update(id, { message: clone(message), updatedAt: new Date().toISOString(), updatedBy: myEmail() || undefined });
   return d;
 }
 
@@ -75,12 +106,44 @@ export function clearDraftServer(serverId: string) {
   for (const d of state.value) if (d.serverId === serverId) store.update(d.id, { serverId: null });
 }
 
-export function setDraftPublished(id: string, ref: PublishedRef | null) {
-  const d = getDraft(id);
-  if (!d) return;
+/** Record a fresh publish. Use a draft that hasn't been published before. */
+export function markPublished(id: string, ref: PublishedRef, message: Message, savedWebhookId: string | null) {
+  const now = new Date().toISOString();
+  const by = myEmail() || undefined;
   store.update(id, {
-    published: ref ? { ...ref, publishedAt: new Date().toISOString() } : undefined,
-    updatedAt: new Date().toISOString(),
+    message: clone(message),
+    published: { ...clone(ref), publishedAt: now, publishedBy: by, savedWebhookId },
+    deleted: undefined,
+    updatedAt: now,
+    updatedBy: by,
+  });
+}
+
+/** Record an edit of the published message on Discord. */
+export function markUpdated(id: string, ref: PublishedRef, message: Message) {
+  const d = getDraft(id);
+  if (!d?.published) return;
+  const now = new Date().toISOString();
+  const by = myEmail() || undefined;
+  store.update(id, {
+    message: clone(message),
+    published: { ...d.published, ...clone(ref), updatedAt: now, updatedBy: by },
+    updatedAt: now,
+    updatedBy: by,
+  });
+}
+
+/** Record that the message was deleted from Discord, keeping where it had been. */
+export function markDeleted(id: string) {
+  const d = getDraft(id);
+  if (!d?.published) return;
+  const now = new Date().toISOString();
+  const by = myEmail() || undefined;
+  store.update(id, {
+    published: undefined,
+    deleted: { ...d.published, deletedAt: now, deletedBy: by },
+    updatedAt: now,
+    updatedBy: by,
   });
 }
 
@@ -149,6 +212,10 @@ export function importDrafts(
       published:
         looksLikeDraft && item.published && typeof item.published.messageId === "string"
           ? item.published
+          : undefined,
+      deleted:
+        looksLikeDraft && item.deleted && typeof item.deleted.messageId === "string" && typeof item.deleted.deletedAt === "string"
+          ? item.deleted
           : undefined,
     };
     store.set(draft);

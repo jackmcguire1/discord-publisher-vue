@@ -87,7 +87,7 @@ describe("servers", () => {
       .should("have.attr", "href")
       .and("eq", `https://discord.com/channels/${GUILD}/555666777888999000/999000111222333444`);
 
-    cy.contains("button", "Drafts").click();
+    cy.contains("button", "Messages").click();
     cy.get(".modal .draft-group").should("have.length", 1).find(".group-label").should("have.text", "Stat-Milestones");
     cy.get(".modal .draft-item .draft-server-select option:selected").should("have.text", "Stat-Milestones");
     cy.get(".modal .draft-item a").should("have.attr", "href").and("include", GUILD);
@@ -100,7 +100,7 @@ describe("servers", () => {
 
     cy.window().then((w) => cy.stub(w, "prompt").returns("Loose draft"));
     cy.contains("button", "Save draft").click();
-    cy.contains("button", "Drafts").click();
+    cy.contains("button", "Messages").click();
 
     cy.get(".modal .draft-group .group-label").should("have.text", "Unassigned");
     cy.get(".modal .draft-server-select").select("Beta");
@@ -151,7 +151,7 @@ describe("servers", () => {
         { id: "x", name: "From elsewhere", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", serverId: "remote-1", message: { content: "hi", tts: false, embeds: [] } },
       ],
     };
-    cy.contains("button", "Drafts").click();
+    cy.contains("button", "Messages").click();
     cy.get('.modal input[type="file"]').selectFile(
       { contents: Cypress.Buffer.from(JSON.stringify(file)), fileName: "drafts.json", mimeType: "application/json" },
       { force: true }

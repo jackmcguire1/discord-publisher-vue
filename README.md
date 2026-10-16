@@ -4,7 +4,7 @@
 
 Build the message in a form, see exactly how Discord will render it, send it with one click, and come back later to edit or delete what you sent. Use it straight away as a guest, with everything saved in your browser. Or sign in with your email (no password), create an organization, invite your team, and share webhooks, servers, authors and drafts between everyone in it.
 
-Built with Vue 3, Vite, TypeScript and Firebase (Authentication and Firestore, on the free Spark plan). Runtime dependencies: `vue`, `firebase`, `zod`, `simple-markdown` and `highlight.js`.
+Built with Vue 3, Vite, TypeScript and Firebase (Authentication and Firestore). Runtime dependencies: `vue`, `firebase`, `zod`, `simple-markdown` and `highlight.js`.
 
 Live site: **https://jackmcguire1.github.io/discord-publisher-vue/**
 
@@ -69,8 +69,11 @@ Live site: **https://jackmcguire1.github.io/discord-publisher-vue/**
 - **JSON**: view the exact payload that will be sent, copy it, download it, paste a payload from anywhere, or import a file, then apply it back to the editor. Hex colour strings and `null` fields from other tools are handled.
 - **cURL**: a ready-to-run command for sending or editing, copyable or downloadable as a shell script.
 
-### Drafts
+### Messages: drafts and sent history
 
+- **Messages** in the toolbar lists drafts, published messages and messages deleted from Discord, with filters for each.
+- Every publish is recorded with who published it, when, through which webhook, and who last updated it. Deleting from Discord keeps the message as history (marked deleted) instead of losing it; publishing it again creates a new message.
+- **Load** on a published message selects the webhook it went through and pulls its current content from Discord, ready to update or delete.
 - Save, rename, duplicate, delete, export and import drafts.
 - Publishing automatically creates a draft if you have not saved one, so every send is tracked.
 - Drafts record when they were last updated and when and where they were published.
@@ -136,7 +139,7 @@ Load the draft (or just stay on it), make your changes, and click **Update publi
 
 ### 6. Save and move drafts around
 
-**Save draft** stores the current message under a name, shared with your organization. **Drafts** opens the list where you can load, rename, duplicate, export or delete them. **Export all** produces a single JSON file you can **Import** into another organization.
+**Save draft** stores the current message under a name, shared with your organization. **Messages** opens the list of drafts, published and deleted messages, where you can load, rename, duplicate, export or delete them. Loading a published message pulls its current content from Discord so you can update or delete it. **Export all** produces a single JSON file you can **Import** into another organization.
 
 ### Tips
 
@@ -153,11 +156,11 @@ Load the draft (or just stay on it), make your changes, and click **Update publi
 | ------ | ------------------------------------------------------------------------------------------ |
 | Owner  | Everything an admin can. Created the organization; cannot be removed, demoted or leave.   |
 | Admin  | Add, edit and delete webhooks and servers. Invite and remove people, change member roles. Delete the organization. |
-| Member | Use the shared webhooks to publish. Add and edit authors and drafts. Leave the organization. |
+| Member | Add and edit authors and drafts, and leave the organization. Plus, per member: **Publish & edit** (publish and update messages on Discord, on by default) and **Delete** (delete messages from Discord and remove published ones from the history, off by default). |
 
 Invites are addressed to an email and are **not emailed**. The invitee sees the invitation when they sign in with exactly that address (a `+tag` counts: `you+a@gmail.com` and `you+b@gmail.com` are different), and joins with the invited role. Use **Copy invite link** next to a pending invite and send it to them yourself: it opens sign-in with their address filled in. Admins can revoke an invite that hasn't been accepted.
 
-These permissions are enforced by the Firestore security rules (`firebase/firestore.rules`), not just hidden in the UI.
+Admins set a member's permissions in **Settings → Members**, or when inviting them. These permissions are enforced by the Firestore security rules (`firebase/firestore.rules`) for the organization's records, not just hidden in the UI. Because the browser calls Discord directly and members can read webhook URLs, a determined member could still call Discord themselves; fully enforcing publish/delete would need server-side code (Cloud Functions).
 
 ## Discord limits enforced
 
@@ -236,7 +239,7 @@ The built site is static (Firebase is called from the browser), so it also works
 
 Production uses the Firebase project `discord-publisher-8a732`. Its web config is in `.env` and is committed on purpose: it identifies the project but grants no access, and it ends up in the built JavaScript anyway. Access is controlled by the security rules. Service-account keys or deploy tokens must never be committed.
 
-Only Authentication and Firestore are used, both on the free Spark plan. Note the Spark plan's limit of **5 email-link sign-in emails per day** across the whole project. Firebase Storage and Cloud Functions are not used.
+Only Authentication and Firestore are used; Firebase Storage and Cloud Functions are not. The project is on the Blaze (pay-as-you-go) plan, which allows 25,000 email-link sign-in emails a day; on the free Spark plan the limit is 5 a day for the whole project. Usage at this scale stays within the free allowance, but set a budget alert in Google Cloud Console → Billing since Blaze has no spending cap.
 
 One-time setup in the [Firebase console](https://console.firebase.google.com/project/discord-publisher-8a732):
 
@@ -352,7 +355,7 @@ You opened it in a different browser from the one you requested it in. Enter the
 They signed in with a different address from the one invited; the welcome screen shows which one. Send them the invite link, or revoke and re-invite the address they used.
 
 **Sign-in emails stop arriving (`auth/quota-exceeded`)**
-On the free Spark plan Firebase sends at most 5 email-link sign-in emails per day for the whole project (25,000 on Blaze). Wait until the next day, or upgrade the project to Blaze.
+Firebase limits email-link sign-in emails per project: 25,000 a day on Blaze, only 5 on the free Spark plan. Check which plan the project is on, and wait until the next day if the limit was hit.
 
 **"Missing or insufficient permissions" (`permission-denied`)**
 The Firestore rules in the console don't match `firebase/firestore.rules`; deploy them again. As a member, you also can't change webhooks or servers; ask an admin.

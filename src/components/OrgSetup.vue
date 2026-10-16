@@ -3,6 +3,7 @@ import { ref } from "vue";
 import Field from "./Field.vue";
 import { user, myInvites, createOrg, acceptInvite, signOut, type Invite } from "../stores/session";
 import { declineInvite } from "../stores/org";
+import { isDismissed, dismiss } from "../stores/dismissed";
 import { toast } from "../stores/toasts";
 
 // Shown when a signed-in user belongs to no organization yet: accept an
@@ -53,9 +54,12 @@ const decline = (i: Invite) => run(() => declineInvite(i), "Could not decline in
           </div>
           <hr class="divider" />
         </section>
-        <div v-else class="banner banner-info no-invites">
-          No invitations for <strong>{{ user?.email }}</strong>. If someone invited you, check they used exactly this
-          address (including anything after a +), or ask them for the invite link.
+        <div v-else-if="!isDismissed('no-invites')" class="banner banner-info no-invites">
+          <span class="grow">
+            No invitations for <strong>{{ user?.email }}</strong>. If someone invited you, check they used exactly this
+            address (including anything after a +), or ask them for the invite link.
+          </span>
+          <button class="banner-close" aria-label="Dismiss" title="Dismiss" @click="dismiss('no-invites', { persist: false })">✕</button>
         </div>
 
         <form class="stack" @submit.prevent="create">

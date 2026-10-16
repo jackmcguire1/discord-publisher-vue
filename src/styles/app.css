@@ -169,9 +169,19 @@ textarea.input.code { font-family: var(--mono); font-size: 12px; min-height: 240
 .banner-error { background: rgba(218, 55, 60, .15); border: 1px solid rgba(218, 55, 60, .4); color: #fa9a9d; }
 .banner-info { background: rgba(88, 101, 242, .15); border: 1px solid rgba(88, 101, 242, .4); }
 .banner-success { background: rgba(35, 165, 89, .15); border: 1px solid rgba(35, 165, 89, .4); color: #8fe1ad; }
+.banner { align-items: center; }
+.banner .grow { flex: 1; min-width: 0; }
+.banner-close {
+  margin-left: auto; flex: none; align-self: flex-start;
+  width: 22px; height: 22px; display: grid; place-items: center;
+  border: none; border-radius: 4px; background: none; color: inherit;
+  opacity: .6; cursor: pointer; font-size: 12px; line-height: 1;
+}
+.banner-close:hover { opacity: 1; background: rgba(255, 255, 255, .1); }
 
 .tag { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 11px; font-weight: 600; background: var(--bg-4); color: var(--text-muted); }
 .tag-green { background: rgba(35,165,89,.25); color: #8fe1ad; }
+.tag-red { background: rgba(218,55,60,.25); color: #fa9a9d; }
 
 /* ---- modal --------------------------------------------------------------- */
 

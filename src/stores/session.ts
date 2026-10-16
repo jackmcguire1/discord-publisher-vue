@@ -20,6 +20,16 @@ export type Role = "owner" | "admin" | "member";
 export interface Membership {
   orgId: string;
   role: Role;
+  /** Publish and update messages on Discord. Admins and owners always can. */
+  canPublish: boolean;
+  /** Delete messages from Discord and remove published ones. Admins and owners always can. */
+  canDelete: boolean;
+}
+
+/** Permission flags as stored on member and invite docs (missing means the default). */
+export interface Permissions {
+  canPublish: boolean;
+  canDelete: boolean;
 }
 
 export interface Invite {
@@ -27,6 +37,14 @@ export interface Invite {
   email: string;
   role: Exclude<Role, "owner">;
   orgName: string;
+  canPublish?: boolean;
+  canDelete?: boolean;
+}
+
+/** Effective permissions for a role plus stored flags. */
+export function permissionsFor(role: Role, data: { canPublish?: boolean; canDelete?: boolean }): Permissions {
+  const admin = role === "owner" || role === "admin";
+  return { canPublish: admin || data.canPublish !== false, canDelete: admin || data.canDelete === true };
 }
 
 export const user = ref<User | null>(null);
@@ -63,6 +81,12 @@ export const isGuest = computed(() => authReady.value && !user.value);
 export const canManage = computed(
   () => isGuest.value || activeRole.value === "owner" || activeRole.value === "admin"
 );
+const activeMembership = computed(() => memberships.value.find((m) => m.orgId === activeOrgId.value));
+/** May publish and update messages on Discord (guests always can). */
+export const canPublish = computed(() => isGuest.value || !!activeMembership.value?.canPublish);
+/** May delete messages from Discord and remove published ones (guests always can). */
+export const canDelete = computed(() => isGuest.value || !!activeMembership.value?.canDelete);
+
 /** Whether a guest has asked to see the sign-in screen. */
 export const signInOpen = ref(false);
 
@@ -194,7 +218,10 @@ onAuthStateChanged(auth, (u) => {
       (snap) => {
         memberships.value = snap.docs
           .filter((d) => !d.metadata.hasPendingWrites)
-          .map((d) => ({ orgId: d.ref.parent.parent!.id, role: d.data().role as Role }));
+          .map((d) => {
+            const role = d.data().role as Role;
+            return { orgId: d.ref.parent.parent!.id, role, ...permissionsFor(role, d.data()) };
+          });
         membershipsReady.value = true;
         watchOrgNames(memberships.value.map((m) => m.orgId));
       },
@@ -245,6 +272,9 @@ export async function acceptInvite(invite: Invite) {
     email: myEmail(),
     role: invite.role,
     joinedAt: new Date().toISOString(),
+    // Copied exactly from the invite; the rules check they match.
+    canPublish: invite.canPublish ?? true,
+    canDelete: invite.canDelete ?? false,
   });
   batch.delete(doc(db, "orgs", invite.orgId, "invites", invite.email));
   await batch.commit();

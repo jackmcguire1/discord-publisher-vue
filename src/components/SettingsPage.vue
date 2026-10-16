@@ -7,6 +7,7 @@ import MembersPanel from "./MembersPanel.vue";
 import WebhooksPanel from "./WebhooksPanel.vue";
 import AuthorsPanel from "./AuthorsPanel.vue";
 import AccountPanel from "./AccountPanel.vue";
+import { isDismissed, dismiss } from "../stores/dismissed";
 
 // Organization and account settings. Guests only have their local webhooks,
 // servers and authors to configure.
@@ -45,9 +46,10 @@ watchEffect(() => {
 
     <main class="settings-main">
       <h1 class="settings-title">{{ current.title }}</h1>
-      <div v-if="isGuest" class="banner banner-info row row-between guest-settings-note">
-        <span>You're a guest, so these are saved in this browser only. Sign in to share them with an organization.</span>
+      <div v-if="isGuest && !isDismissed('guest-settings-note')" class="banner banner-info guest-settings-note">
+        <span class="grow">You're a guest, so these are saved in this browser only. Sign in to share them with an organization.</span>
         <button class="btn btn-sm" @click="signInOpen = true">Sign in</button>
+        <button class="banner-close" aria-label="Dismiss" title="Dismiss" @click="dismiss('guest-settings-note')">✕</button>
       </div>
       <div class="card">
         <div class="card-body">

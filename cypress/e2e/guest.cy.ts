@@ -29,7 +29,7 @@ describe("guest mode", () => {
 
     cy.reload();
     cy.get("select.webhook-select").find("option:selected").should("have.text", "Guest hook");
-    cy.openModal("Drafts");
+    cy.openModal("Messages");
     cy.get(".draft-name").should("have.text", "Guest draft");
     cy.get(".draft .tag-green").should("have.text", "published");
   });

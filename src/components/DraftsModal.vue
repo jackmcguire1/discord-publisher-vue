@@ -1,35 +1,108 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
 import Modal from "./Modal.vue";
-import { drafts, deleteDraft, duplicateDraft, renameDraft, setDraftServer, exportDrafts, importDrafts, type Draft } from "../stores/drafts";
+import {
+  drafts,
+  deleteDraft,
+  duplicateDraft,
+  renameDraft,
+  setDraftServer,
+  exportDrafts,
+  importDrafts,
+  statusOf,
+  type Draft,
+  type MessageStatus,
+} from "../stores/drafts";
 import { message, currentDraftId, replaceMessage } from "../stores/message";
-import { messageLink } from "../discord/webhook";
-import { webhookByDiscordId } from "../stores/webhooks";
+import { messageLink, fetchMessage, type DiscordApiError } from "../discord/webhook";
+import { parseIncomingMessage } from "../discord/schema";
+import { webhookByDiscordId, getWebhook, selectWebhook } from "../stores/webhooks";
+import { settings, webhookInfo } from "../stores/settings";
+import { canDelete } from "../stores/session";
 import { servers, getServer, addServer, findServerByName, guildIdFor, type Server } from "../stores/servers";
 import { downloadText, readFileAsText, slugify, formatDateTime } from "../util";
 import { toast } from "../stores/toasts";
 
 const emit = defineEmits<{ close: [] }>();
 
-/** Drafts grouped by server (alphabetical), unassigned last. Empty servers are hidden. */
+type Filter = "all" | MessageStatus;
+const filter = ref<Filter>("all");
+const FILTERS: { id: Filter; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "draft", label: "Drafts" },
+  { id: "published", label: "Published" },
+  { id: "deleted", label: "Deleted" },
+];
+const counts = computed(() => {
+  const c: Record<Filter, number> = { all: drafts.value.length, draft: 0, published: 0, deleted: 0 };
+  for (const d of drafts.value) c[statusOf(d)]++;
+  return c;
+});
+const shown = computed(() => (filter.value === "all" ? drafts.value : drafts.value.filter((d) => statusOf(d) === filter.value)));
+
+/** Messages grouped by server (alphabetical), unassigned last. Empty servers are hidden. */
 const groups = computed(() => {
   const out: { server: Server | null; drafts: Draft[] }[] = [];
   for (const s of servers.value) {
-    const list = drafts.value.filter((d) => d.serverId === s.id);
+    const list = shown.value.filter((d) => d.serverId === s.id);
     if (list.length) out.push({ server: s, drafts: list });
   }
-  const loose = drafts.value.filter((d) => !d.serverId || !getServer(d.serverId));
+  const loose = shown.value.filter((d) => !d.serverId || !getServer(d.serverId));
   if (loose.length) out.push({ server: null, drafts: loose });
   return out;
 });
 
-function load(d: Draft) {
+const loading = ref<string | null>(null);
+
+/**
+ * Load a message into the editor. A published one also selects the webhook it
+ * went through and pulls its current content from Discord (it may have been
+ * edited since), falling back to the stored copy.
+ */
+async function load(d: Draft) {
   const current = drafts.value.find((x) => x.id === currentDraftId.value)?.message;
   const unsaved = currentDraftId.value !== d.id && JSON.stringify(message.value) !== JSON.stringify(current);
-  if (unsaved && !confirm("Replace the current editor contents with this draft? Unsaved changes will be lost (undo still works).")) return;
-  replaceMessage(JSON.parse(JSON.stringify(d.message)), d.id);
-  toast("info", "Draft loaded", d.name);
+  if (unsaved && !confirm("Replace the current editor contents with this message? Unsaved changes will be lost (undo still works).")) return;
+
+  let next = JSON.parse(JSON.stringify(d.message));
+  const info = d.published;
+  if (!info) {
+    replaceMessage(next, d.id);
+    toast("info", statusOf(d) === "deleted" ? "Deleted message loaded" : "Draft loaded", d.name);
+    emit("close");
+    return;
+  }
+
+  const hook = getWebhook(info.savedWebhookId) ?? webhookByDiscordId(info.webhookId);
+  if (hook) selectWebhook(hook.id);
+  settings.value.threadId = info.threadId ?? "";
+  if (webhookInfo.value?.id !== info.webhookId) {
+    replaceMessage(next, d.id);
+    toast("info", "Loaded the saved copy", "The webhook that published it isn't available here, so it can't be refreshed from Discord or edited.");
+    emit("close");
+    return;
+  }
+
+  loading.value = d.id;
+  try {
+    const live = parseIncomingMessage(await fetchMessage(settings.value.webhookUrl, info.messageId, info.threadId));
+    // Discord doesn't return the webhook identity overrides; keep ours.
+    next = { ...live, username: next.username, avatar_url: next.avatar_url };
+    replaceMessage(next, d.id);
+    toast("success", "Loaded from Discord", d.name);
+  } catch (e) {
+    replaceMessage(next, d.id);
+    const err = e as DiscordApiError;
+    if (err?.status === 404) toast("error", "Not found on Discord", "It may have been deleted outside this app. Loaded the saved copy.", 10000);
+    else toast("info", "Loaded the saved copy", `Couldn't reach Discord: ${err?.message ?? e}`);
+  } finally {
+    loading.value = null;
+  }
   emit("close");
+}
+
+function isHistory(d: Draft) {
+  return statusOf(d) !== "draft";
 }
 
 function rename(d: Draft) {
@@ -38,7 +111,8 @@ function rename(d: Draft) {
 }
 
 function remove(d: Draft) {
-  if (!confirm(`Delete draft "${d.name}"? This does not touch Discord.`)) return;
+  const what = isHistory(d) ? `Remove "${d.name}" and its publish history from this organization?` : `Delete draft "${d.name}"?`;
+  if (!confirm(`${what} This does not touch Discord.`)) return;
   deleteDraft(d.id);
   if (currentDraftId.value === d.id) currentDraftId.value = null;
 }
@@ -49,6 +123,10 @@ function onServerChange(d: Draft, e: Event) {
 
 function linkFor(d: Draft): string {
   return d.published ? messageLink(d.published, guildIdFor(d.serverId)) : "#";
+}
+
+function via(webhookId: string, savedWebhookId?: string | null) {
+  return (getWebhook(savedWebhookId) ?? webhookByDiscordId(webhookId))?.name;
 }
 
 const resolveServer = (id: string) => {
@@ -89,11 +167,26 @@ async function importFiles(e: Event) {
 </script>
 
 <template>
-  <Modal title="Drafts" @close="emit('close')">
+  <Modal title="Messages" @close="emit('close')">
     <div v-if="!drafts.length" class="empty">
-      No drafts yet. Use “Save draft” in the toolbar, or publish a message and it will be tracked here automatically.
+      No messages yet. Use “Save draft” in the toolbar, or publish a message and it will be tracked here automatically.
     </div>
     <div v-else class="stack" style="--gap: 12px">
+      <div class="row message-filters" role="tablist">
+        <button
+          v-for="f in FILTERS"
+          :key="f.id"
+          class="btn btn-sm"
+          :class="filter === f.id ? 'btn-primary' : 'btn-ghost'"
+          :data-filter="f.id"
+          role="tab"
+          :aria-selected="filter === f.id"
+          @click="filter = f.id"
+        >
+          {{ f.label }} <span class="tag">{{ counts[f.id] }}</span>
+        </button>
+      </div>
+      <div v-if="!shown.length" class="empty">Nothing here.</div>
       <div v-for="g in groups" :key="g.server?.id ?? 'none'" class="draft-group">
         <div class="group-label">{{ g.server ? g.server.name : servers.length ? "Unassigned" : "" }}</div>
         <div class="draft-list">
@@ -103,13 +196,18 @@ async function importFiles(e: Event) {
                 <span class="draft-name">{{ d.name }}</span>
                 <span v-if="d.id === currentDraftId" class="tag">editing</span>
                 <span v-if="d.published" class="tag tag-green">published</span>
+                <span v-else-if="d.deleted" class="tag tag-red">deleted</span>
               </div>
               <div class="draft-meta">
-                Updated {{ formatDateTime(d.updatedAt) }}
+                Updated {{ formatDateTime(d.updatedAt) }}<template v-if="d.updatedBy"> by {{ d.updatedBy }}</template>
                 · {{ d.message.embeds.length }} embed{{ d.message.embeds.length === 1 ? "" : "s" }}
                 <template v-if="d.published">
-                  · published {{ formatDateTime(d.published.publishedAt) }}<template v-if="webhookByDiscordId(d.published.webhookId)"> via {{ webhookByDiscordId(d.published.webhookId)!.name }}</template> ·
+                  · published {{ formatDateTime(d.published.publishedAt) }}<template v-if="d.published.publishedBy"> by {{ d.published.publishedBy }}</template><template v-if="via(d.published.webhookId, d.published.savedWebhookId)"> via {{ via(d.published.webhookId, d.published.savedWebhookId) }}</template> ·
                   <a :href="linkFor(d)" target="_blank" rel="noreferrer">open</a>
+                </template>
+                <template v-else-if="d.deleted">
+                  · published {{ formatDateTime(d.deleted.publishedAt) }}<template v-if="via(d.deleted.webhookId, d.deleted.savedWebhookId)"> via {{ via(d.deleted.webhookId, d.deleted.savedWebhookId) }}</template>,
+                  deleted from Discord {{ formatDateTime(d.deleted.deletedAt) }}<template v-if="d.deleted.deletedBy"> by {{ d.deleted.deletedBy }}</template>
                 </template>
               </div>
             </div>
@@ -118,11 +216,16 @@ async function importFiles(e: Event) {
                 <option value="">Unassigned</option>
                 <option v-for="s in servers" :key="s.id" :value="s.id">{{ s.name }}</option>
               </select>
-              <button class="btn btn-sm btn-primary" @click="load(d)">Load</button>
+              <button class="btn btn-sm btn-primary" :disabled="loading === d.id" @click="load(d)">{{ loading === d.id ? "Loading…" : "Load" }}</button>
               <button class="btn btn-sm btn-ghost" title="Rename" @click="rename(d)">Rename</button>
               <button class="btn btn-sm btn-ghost" @click="duplicateDraft(d.id)">Duplicate</button>
               <button class="btn btn-sm btn-ghost" @click="exportOne(d)">Export</button>
-              <button class="btn btn-sm btn-danger" title="Delete" @click="remove(d)">✕</button>
+              <button
+                class="btn btn-sm btn-danger"
+                :disabled="isHistory(d) && !canDelete"
+                :title="isHistory(d) ? (canDelete ? 'Remove from history' : 'You don\'t have permission to remove published messages') : 'Delete draft'"
+                @click="remove(d)"
+              >✕</button>
             </div>
           </div>
         </div>

@@ -31,6 +31,7 @@ import {
 } from "./stores/session";
 import { toast } from "./stores/toasts";
 import { hasLegacyData } from "./stores/legacy";
+import { isDismissed, dismiss } from "./stores/dismissed";
 import { route, href } from "./router";
 
 type View = "json" | "curl" | "drafts" | "webhooks" | null;
@@ -84,9 +85,10 @@ onUnmounted(() => window.removeEventListener("keydown", onKey));
     <div v-else class="app">
       <div class="pane pane-editor">
         <div class="stack">
-          <div v-if="user && hasLegacyData" class="banner banner-info row row-between legacy-banner">
-            <span>This browser has webhooks, authors or drafts saved while signed out.</span>
+          <div v-if="user && hasLegacyData && !isDismissed('legacy-import')" class="banner banner-info legacy-banner">
+            <span class="grow">This browser has webhooks, authors or drafts saved while signed out.</span>
             <a class="btn btn-sm" :href="href('/settings/general')">Import…</a>
+            <button class="banner-close" aria-label="Dismiss" title="Dismiss" @click="dismiss('legacy-import', { persist: false })">✕</button>
           </div>
           <div class="row row-between">
             <h2 style="margin: 0">Message</h2>

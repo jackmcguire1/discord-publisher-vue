@@ -2,12 +2,19 @@ rules_version = '2';
 
 // Data model
 //   orgs/{orgId}                    { name, ownerUid, createdAt, deleting? }
-//   orgs/{orgId}/members/{uid}      { uid, email, role: owner|admin|member, joinedAt }
-//   orgs/{orgId}/invites/{email}    { email, role: admin|member, orgName, invitedBy, createdAt }
+//   orgs/{orgId}/members/{uid}      { uid, email, role: owner|admin|member, joinedAt, canPublish?, canDelete? }
+//   orgs/{orgId}/invites/{email}    { email, role: admin|member, orgName, invitedBy, createdAt, canPublish?, canDelete? }
 //   orgs/{orgId}/servers/{id}       admins write, members read
 //   orgs/{orgId}/webhooks/{id}      admins write, members read (holds the webhook token)
 //   orgs/{orgId}/authors/{id}       members read/write
-//   orgs/{orgId}/drafts/{id}        members read/write
+//   orgs/{orgId}/drafts/{id}        messages: drafts, published (`published`) and deleted from Discord (`deleted`)
+//
+// Permissions: owners and admins can do everything. Members carry two flags:
+// canPublish (default true) to publish and update messages on Discord, and
+// canDelete (default false) to delete them from Discord or remove a published
+// or deleted message from the org. Plain drafts are open to every member.
+// Discord itself is called from the browser, so these rules govern the org's
+// records of messages, not Discord.
 //
 // Everything is scoped to an org. Users join by creating an org (becoming its
 // owner) or by accepting an invite addressed to their verified email.
@@ -51,6 +58,30 @@ service cloud.firestore {
       return isMember(orgId) && role(orgId) in ['owner', 'admin'];
     }
 
+    function perm(orgId, key, fallback) {
+      return isAdmin(orgId) || (isMember(orgId) && get(memberPath(orgId)).data.get(key, fallback) == true);
+    }
+
+    function canPublish(orgId) {
+      return perm(orgId, 'canPublish', true);
+    }
+
+    function canDelete(orgId) {
+      return perm(orgId, 'canDelete', false);
+    }
+
+    function field(data, name) {
+      return data.get(name, null);
+    }
+
+    function validPerms(data) {
+      return data.get('canPublish', true) is bool && data.get('canDelete', false) is bool;
+    }
+
+    function invitePath(orgId) {
+      return /databases/$(database)/documents/orgs/$(orgId)/invites/$(myEmail());
+    }
+
     function isDeleting(orgId) {
       return exists(orgPath(orgId)) && get(orgPath(orgId)).data.get('deleting', false) == true;
     }
@@ -91,7 +122,7 @@ service cloud.firestore {
 
         allow create: if signedIn()
           && uid == request.auth.uid
-          && request.resource.data.keys().hasOnly(['uid', 'email', 'role', 'joinedAt'])
+          && request.resource.data.keys().hasOnly(['uid', 'email', 'role', 'joinedAt', 'canPublish', 'canDelete'])
           && request.resource.data.uid == uid
           && request.resource.data.email == myEmail()
           && (
@@ -100,18 +131,22 @@ service cloud.firestore {
               && !exists(orgPath(orgId))
               && getAfter(orgPath(orgId)).data.ownerUid == request.auth.uid)
             ||
-            // Accepting an invite addressed to this (verified) email, with the invited role.
+            // Accepting an invite addressed to this (verified) email, with exactly the invited role and permissions.
             (verified()
-              && exists(/databases/$(database)/documents/orgs/$(orgId)/invites/$(myEmail()))
-              && get(/databases/$(database)/documents/orgs/$(orgId)/invites/$(myEmail())).data.role == request.resource.data.role)
+              && exists(invitePath(orgId))
+              && get(invitePath(orgId)).data.role == request.resource.data.role
+              && get(invitePath(orgId)).data.get('canPublish', true) == request.resource.data.get('canPublish', true)
+              && get(invitePath(orgId)).data.get('canDelete', false) == request.resource.data.get('canDelete', false))
           );
 
-        // Admins can switch others between admin and member; the owner's role is fixed.
+        // Admins can switch others between admin and member and set their
+        // permissions; the owner's role is fixed.
         allow update: if isAdmin(orgId)
           && uid != request.auth.uid
           && resource.data.role != 'owner'
-          && onlyChanges(['role'])
-          && request.resource.data.role in ['admin', 'member'];
+          && onlyChanges(['role', 'canPublish', 'canDelete'])
+          && request.resource.data.role in ['admin', 'member']
+          && validPerms(request.resource.data);
 
         // Admins remove others; anyone but the owner can leave. While an org is
         // being deleted admins may remove anyone, and once the org doc is gone
@@ -124,7 +159,8 @@ service cloud.firestore {
       match /invites/{inviteEmail} {
         allow read: if isMember(orgId) || (verified() && inviteEmail == myEmail());
         allow create, update: if isAdmin(orgId)
-          && request.resource.data.keys().hasOnly(['email', 'role', 'orgName', 'invitedBy', 'createdAt'])
+          && request.resource.data.keys().hasOnly(['email', 'role', 'orgName', 'invitedBy', 'createdAt', 'canPublish', 'canDelete'])
+          && validPerms(request.resource.data)
           && request.resource.data.email == inviteEmail
           && inviteEmail == inviteEmail.lower()
           && shortString(inviteEmail, 320)
@@ -162,10 +198,27 @@ service cloud.firestore {
       }
 
       match /drafts/{id} {
-        allow read, delete: if isMember(orgId);
-        allow create, update: if isMember(orgId)
-          && shortString(request.resource.data.name, 200)
-          && request.resource.data.message is map;
+        function validMessage() {
+          return shortString(request.resource.data.name, 200) && request.resource.data.message is map;
+        }
+
+        allow read: if isMember(orgId);
+
+        allow create: if isMember(orgId) && validMessage()
+          && (field(request.resource.data, 'published') == null || canPublish(orgId))
+          && (field(request.resource.data, 'deleted') == null || canDelete(orgId));
+
+        // Publishing or updating on Discord changes `published`; deleting from
+        // Discord clears it and sets `deleted`.
+        allow update: if isMember(orgId) && validMessage()
+          && (field(request.resource.data, 'deleted') == field(resource.data, 'deleted') || canDelete(orgId))
+          && (field(request.resource.data, 'published') == field(resource.data, 'published')
+            || (field(request.resource.data, 'published') == null && canDelete(orgId))
+            || (field(request.resource.data, 'published') != null && canPublish(orgId)));
+
+        // Plain drafts can be removed by any member; published or deleted messages are history.
+        allow delete: if isMember(orgId)
+          && ((field(resource.data, 'published') == null && field(resource.data, 'deleted') == null) || canDelete(orgId));
       }
     }
   }

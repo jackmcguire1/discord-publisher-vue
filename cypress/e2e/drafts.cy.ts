@@ -7,7 +7,7 @@ describe("drafts", () => {
     cy.toast("Draft saved");
     cy.contains("Draft:").should("contain.text", "Release notes");
 
-    cy.openModal("Drafts");
+    cy.openModal("Messages");
     cy.get(".draft").should("have.length", 1).and("have.class", "active");
     cy.get(".draft-name").should("have.text", "Release notes");
     cy.get(".draft .tag").should("contain.text", "editing");
@@ -24,7 +24,7 @@ describe("drafts", () => {
     cy.toast("Draft updated");
     cy.contains("button", "Save as new").click();
     cy.contains("Draft:").should("contain.text", "Second");
-    cy.openModal("Drafts");
+    cy.openModal("Messages");
     cy.get(".draft").should("have.length", 2);
   });
 
@@ -35,7 +35,7 @@ describe("drafts", () => {
     cy.contains("button", "Clear message").click();
     cy.get(".discord-embed").should("not.exist");
 
-    cy.openModal("Drafts");
+    cy.openModal("Messages");
     cy.contains(".draft", "Original").contains("button", "Load").click();
     cy.toast("Draft loaded");
     cy.get(".discord-embed-title").should("contain.text", "v1.8.2");
@@ -48,7 +48,7 @@ describe("drafts", () => {
       stub.onSecondCall().returns("Draft Renamed");
     });
     cy.contains("button", "Save draft").click();
-    cy.openModal("Drafts");
+    cy.openModal("Messages");
 
     cy.contains(".draft", "Draft A").contains("button", "Rename").click();
     cy.get(".draft-name").should("have.text", "Draft Renamed");
@@ -66,7 +66,7 @@ describe("drafts", () => {
     cy.setWebhook();
     cy.contains("button", "Publish").click();
     cy.wait("@send");
-    cy.openModal("Drafts");
+    cy.openModal("Messages");
     cy.get(".draft .tag-green").should("have.text", "published");
     cy.contains(".draft a", "open").should("have.attr", "href").and("include", "999000111222333444");
   });
@@ -87,7 +87,7 @@ describe("drafts", () => {
         { id: "y", name: "Imported two", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", message: { content: "", tts: false, embeds: [{ title: "E" }] } },
       ],
     };
-    cy.openModal("Drafts");
+    cy.openModal("Messages");
     cy.get('.modal input[type="file"]').selectFile(
       { contents: Cypress.Buffer.from(JSON.stringify(file)), fileName: "drafts.json", mimeType: "application/json" },
       { force: true }
@@ -99,7 +99,7 @@ describe("drafts", () => {
   });
 
   it("imports a bare webhook payload as a draft", () => {
-    cy.openModal("Drafts");
+    cy.openModal("Messages");
     cy.get('.modal input[type="file"]').selectFile(
       { contents: Cypress.Buffer.from(JSON.stringify({ content: "bare payload" })), fileName: "payload.json", mimeType: "application/json" },
       { force: true }

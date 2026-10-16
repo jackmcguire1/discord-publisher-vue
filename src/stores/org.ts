@@ -1,12 +1,12 @@
 import { ref, watch } from "vue";
 import { collection, deleteDoc, doc, getDocs, onSnapshot, setDoc, updateDoc, writeBatch, type DocumentReference } from "firebase/firestore";
 import { db } from "../firebase";
-import { activeOrgId, activeOrgName, user, departOrg, type Invite, type Role } from "./session";
+import { activeOrgId, activeOrgName, user, departOrg, permissionsFor, type Invite, type Permissions, type Role } from "./session";
 
 // Membership management for the active org: who is in it, who is invited,
 // and the admin actions on both.
 
-export interface Member {
+export interface Member extends Permissions {
   uid: string;
   email: string;
   role: Role;
@@ -29,7 +29,10 @@ watch(
       onSnapshot(collection(db, "orgs", orgId, "members"), (snap) => {
         const order: Record<Role, number> = { owner: 0, admin: 1, member: 2 };
         members.value = snap.docs
-          .map((d) => d.data() as Member)
+          .map((d) => {
+            const data = d.data() as Member;
+            return { ...data, ...permissionsFor(data.role, data) };
+          })
           .sort((a, b) => order[a.role] - order[b.role] || a.email.localeCompare(b.email));
       }, (e) => console.error("members listener", e)),
       onSnapshot(
@@ -51,11 +54,13 @@ export function renameOrg(name: string) {
   return updateDoc(doc(db, "orgs", orgId()), { name: name.trim() });
 }
 
-export function inviteMember(email: string, role: Invite["role"]) {
+export function inviteMember(email: string, role: Invite["role"], perms: Permissions = { canPublish: true, canDelete: false }) {
   const e = email.trim().toLowerCase();
   return setDoc(doc(db, "orgs", orgId(), "invites", e), {
     email: e,
     role,
+    canPublish: perms.canPublish,
+    canDelete: perms.canDelete,
     orgName: activeOrgName.value,
     invitedBy: user.value!.uid,
     createdAt: new Date().toISOString(),
@@ -72,6 +77,10 @@ export function declineInvite(invite: Invite) {
 
 export function setMemberRole(uid: string, role: Exclude<Role, "owner">) {
   return updateDoc(doc(db, "orgs", orgId(), "members", uid), { role });
+}
+
+export function setMemberPermissions(uid: string, patch: Partial<Permissions>) {
+  return updateDoc(doc(db, "orgs", orgId(), "members", uid), patch);
 }
 
 export function removeMember(uid: string) {
