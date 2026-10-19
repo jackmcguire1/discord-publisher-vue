@@ -101,7 +101,8 @@ describe("server access", () => {
     // The owner widens access back to all servers.
     cy.signIn();
     cy.accountMenu("Members");
-    cy.contains(".member-item", TEAMMATE).should("contain.text", "Server A").find(".member-servers").click();
+    cy.contains(".member-item", TEAMMATE).should("contain.text", "Server A");
+    cy.contains(".member-item", TEAMMATE).find(".member-servers").click();
     cy.contains(".member-item", TEAMMATE).find(".access-all").check();
     cy.contains(".member-item", TEAMMATE).find(".member-permissions").should("contain.text", "all servers");
   });

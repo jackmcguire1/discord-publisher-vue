@@ -7,7 +7,9 @@ describe("dismissible banners", () => {
     cy.setWebhook();
     cy.contains("button", "Publish").click();
     cy.wait("@send");
-    cy.get(".banner-success").should("contain.text", "open in Discord").find(".banner-close").click();
+    // Re-query rather than chain: the banner re-renders as Firestore confirms the publish.
+    cy.get(".banner-success").should("contain.text", "open in Discord");
+    cy.get(".banner-success .banner-close").click();
     cy.get(".banner-success").should("not.exist");
     // The published actions are still there; only the notice is gone.
     cy.contains("button", "Update published").should("exist");
