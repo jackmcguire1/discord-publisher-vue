@@ -47,6 +47,7 @@ describe("drafts", () => {
       const stub = cy.stub(w, "prompt");
       stub.onFirstCall().returns("Draft A");
       stub.onSecondCall().returns("Draft Renamed");
+      stub.onThirdCall().callsFake((_m: string, suggested: string) => suggested); // keep the suggested copy name
     });
     cy.contains("button", "Save draft").click();
     cy.openModal("Messages");
@@ -115,7 +116,8 @@ describe("drafts", () => {
     cy.window().then((w) => {
       const stub = cy.stub(w, "prompt");
       stub.onFirstCall().returns(STARTER); // accept the suggested name
-      stub.onSecondCall().returns("My own name"); // type a name
+      stub.onSecondCall().callsFake((_m: string, suggested: string) => suggested); // keep the suggested copy name
+      stub.onThirdCall().returns("My own name"); // type a name
     });
 
     // Suggested name, duplicated, then retitled: the copy takes the new title.
@@ -138,5 +140,22 @@ describe("drafts", () => {
     cy.get("textarea").first().clear().type("Completely different", { delay: 0 });
     cy.contains("button", "Update draft").click();
     cy.get(".editing-name").should("contain.text", "My own name");
+  });
+
+  it("duplicate asks for a name: pre-filled, changeable, or cancelled", () => {
+    cy.window().then((w) => {
+      const stub = cy.stub(w, "prompt").as("prompt");
+      stub.onFirstCall().returns("Weekly");
+      stub.onSecondCall().returns(null); // cancel
+      stub.onThirdCall().returns("Next week");
+    });
+    cy.contains("button", "Save draft").click();
+    cy.openModal("Messages");
+    cy.contains(".draft", "Weekly").contains("button", "Duplicate").click();
+    cy.get("@prompt").should("have.been.calledWith", "Name for the copy", "Weekly (copy)");
+    cy.get(".draft").should("have.length", 1);
+    cy.contains(".draft", "Weekly").contains("button", "Duplicate").click();
+    cy.toast("Message duplicated");
+    cy.get(".draft-name").should("contain.text", "Next week").and("not.contain.text", "(copy)");
   });
 });

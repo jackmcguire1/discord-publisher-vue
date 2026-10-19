@@ -15,13 +15,13 @@ import {
 } from "../stores/drafts";
 import { currentDraftId, replaceMessage, isDirty } from "../stores/message";
 import { requestNewMessage, selectWebhookFor, openHistory } from "../stores/editorActions";
-import { messageLink, fetchMessage, type DiscordApiError } from "../discord/webhook";
+import { fetchMessage, type DiscordApiError } from "../discord/webhook";
 import { parseIncomingMessage } from "../discord/schema";
-import { webhookByDiscordId, getWebhook } from "../stores/webhooks";
 import { settings, webhookInfo } from "../stores/settings";
-import { canDelete } from "../stores/session";
-import { servers, getServer, addServer, findServerByName, guildIdFor, type Server } from "../stores/servers";
+import { servers, getServer, addServer, findServerByName } from "../stores/servers";
 import { downloadText, readFileAsText, slugify, formatDateTime } from "../util";
+import MessageRow from "./MessageRow.vue";
+import { webhookForCopy } from "../stores/fanout";
 import { toast } from "../stores/toasts";
 
 /** `loaded`: a message is now in the editor. `handoff`: another dialog opened; a modal host should close. */
@@ -42,17 +42,54 @@ const counts = computed(() => {
 });
 const shown = computed(() => (filter.value === "all" ? drafts.value : drafts.value.filter((d) => statusOf(d) === filter.value)));
 
-/** Messages grouped by server (alphabetical), unassigned last. Empty servers are hidden. */
-const groups = computed(() => {
-  const out: { server: Server | null; drafts: Draft[] }[] = [];
-  for (const s of servers.value) {
-    const list = shown.value.filter((d) => d.serverId === s.id);
-    if (list.length) out.push({ server: s, drafts: list });
+/** A row in the list: one message, or the copies of a message published to several webhooks. */
+type Entry = { kind: "single"; d: Draft } | { kind: "group"; id: string; copies: Draft[] };
+
+const latest = (copies: Draft[]) => copies.reduce((m, c) => (c.updatedAt > m ? c.updatedAt : m), "");
+const entryTime = (e: Entry) => (e.kind === "single" ? e.d.updatedAt : latest(e.copies));
+
+/**
+ * Sections by server (alphabetical, unassigned last). A group sits under its
+ * server when all its copies share one, else in "Several servers" at the top.
+ */
+const sections = computed(() => {
+  const byGroup = new Map<string, Draft[]>();
+  const entries: { key: string; entry: Entry }[] = [];
+  const sectionOf = (serverId: string | null) => (serverId && getServer(serverId) ? serverId : "none");
+  for (const d of shown.value) {
+    if (d.groupId && groupCopies(d.groupId).length > 1) {
+      if (!byGroup.has(d.groupId)) byGroup.set(d.groupId, []);
+      byGroup.get(d.groupId)!.push(d);
+    } else {
+      entries.push({ key: sectionOf(d.serverId), entry: { kind: "single", d } });
+    }
   }
-  const loose = shown.value.filter((d) => !d.serverId || !getServer(d.serverId));
-  if (loose.length) out.push({ server: null, drafts: loose });
-  return out;
+  for (const [id, copies] of byGroup) {
+    copies.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    const keys = new Set(copies.map((c) => sectionOf(c.serverId)));
+    entries.push({ key: keys.size === 1 ? [...keys][0] : "several", entry: { kind: "group", id, copies } });
+  }
+  const pick = (key: string) =>
+    entries
+      .filter((x) => x.key === key)
+      .map((x) => x.entry)
+      .sort((a, b) => entryTime(b).localeCompare(entryTime(a)));
+  return [
+    { key: "several", label: "Several servers", entries: pick("several") },
+    ...servers.value.map((s) => ({ key: s.id, label: s.name, entries: pick(s.id) })),
+    { key: "none", label: servers.value.length ? "Unassigned" : "", entries: pick("none") },
+  ].filter((sec) => sec.entries.length);
 });
+
+const expanded = ref<string[]>([]);
+const isOpen = (id: string) => expanded.value.includes(id);
+function toggle(id: string) {
+  expanded.value = isOpen(id) ? expanded.value.filter((x) => x !== id) : [...expanded.value, id];
+}
+const liveIn = (copies: Draft[]) => copies.filter((c) => c.published).length;
+const deletedIn = (copies: Draft[]) => copies.filter((c) => c.deleted).length;
+/** Which webhook a copy belongs to, for its label in a group. */
+const copyLabel = (c: Draft) => webhookForCopy(c)?.name ?? "Webhook not available to you";
 
 const loading = ref<string | null>(null);
 
@@ -103,7 +140,10 @@ async function load(d: Draft) {
 const justAdded = ref<string | null>(null);
 
 async function duplicate(d: Draft) {
-  const copy = duplicateDraft(d.id);
+  const suggested = `${d.name} (copy)`;
+  const name = prompt("Name for the copy", suggested);
+  if (name == null) return;
+  const copy = duplicateDraft(d.id, name);
   if (!copy) return;
   // A copy is always a plain draft, so leave a filter that would hide it.
   if (filter.value !== "all" && filter.value !== "draft") filter.value = "all";
@@ -130,18 +170,6 @@ function remove(d: Draft) {
   if (!confirm(`${what} This does not touch Discord.`)) return;
   deleteDraft(d.id);
   if (currentDraftId.value === d.id) currentDraftId.value = null;
-}
-
-function onServerChange(d: Draft, e: Event) {
-  setDraftServer(d.id, (e.target as HTMLSelectElement).value || null);
-}
-
-function linkFor(d: Draft): string {
-  return d.published ? messageLink(d.published, guildIdFor(d.serverId)) : "#";
-}
-
-function via(webhookId: string, savedWebhookId?: string | null) {
-  return (getWebhook(savedWebhookId) ?? webhookByDiscordId(webhookId))?.name;
 }
 
 const resolveServer = (id: string) => {
@@ -206,58 +234,54 @@ async function importFiles(e: Event) {
         </button>
       </div>
       <div v-if="!shown.length" class="empty">Nothing here.</div>
-      <div v-for="g in groups" :key="g.server?.id ?? 'none'" class="draft-group">
-        <div class="group-label">{{ g.server ? g.server.name : servers.length ? "Unassigned" : "" }}</div>
+      <div v-for="sec in sections" :key="sec.key" class="draft-group">
+        <div class="group-label">{{ sec.label }}</div>
         <div class="draft-list">
-          <div
-            v-for="d in g.drafts"
-            :key="d.id"
-            class="draft draft-item"
-            :class="{ active: d.id === currentDraftId, 'just-added': d.id === justAdded }"
-            :data-message-id="d.id"
-          >
-            <div class="grow">
-              <div class="row">
-                <span class="draft-name">{{ d.name }}</span>
-                <span v-if="groupCopies(d.groupId).length > 1" class="tag copies-tag" title="Published to several webhooks; each copy is listed">
-                  1 of {{ groupCopies(d.groupId).length }} copies
-                </span>
-                <span v-if="d.revision" class="tag revision-tag" :title="`${d.revision} revision${d.revision === 1 ? '' : 's'}`">v{{ d.revision }}</span>
-                <span v-if="d.id === currentDraftId" class="tag">editing</span>
-                <span v-if="d.published" class="tag tag-green">published</span>
-                <span v-else-if="d.deleted" class="tag tag-red">deleted</span>
+          <template v-for="e in sec.entries" :key="e.kind === 'single' ? e.d.id : e.id">
+            <MessageRow
+              v-if="e.kind === 'single'"
+              :d="e.d"
+              :loading="loading"
+              :just-added="justAdded"
+              @load="load"
+              @history="(d) => { openHistory(d.id); emit('handoff'); }"
+              @rename="rename"
+              @duplicate="duplicate"
+              @export="exportOne"
+              @remove="remove"
+              @server="(d, id) => setDraftServer(d.id, id)"
+            />
+            <div v-else class="draft message-group" :class="{ active: e.copies.some((c) => c.id === currentDraftId) }" :data-group-id="e.id">
+              <button class="group-toggle" :aria-expanded="isOpen(e.id)" @click="toggle(e.id)">
+                <span class="chevron" :class="{ open: isOpen(e.id) }">▸</span>
+                <span class="draft-name">{{ e.copies[0].name }}</span>
+                <span class="tag group-count">Published to {{ groupCopies(e.id).length }} webhooks</span>
+                <span v-if="liveIn(e.copies)" class="tag tag-green">{{ liveIn(e.copies) }} published</span>
+                <span v-if="deletedIn(e.copies)" class="tag tag-red">{{ deletedIn(e.copies) }} deleted</span>
+                <span v-if="e.copies.some((c) => c.id === currentDraftId)" class="tag">editing</span>
+              </button>
+              <div class="draft-meta group-summary">
+                Updated {{ formatDateTime(latest(e.copies)) }} · {{ e.copies.map(copyLabel).join(", ") }}
               </div>
-              <div class="draft-meta">
-                Updated {{ formatDateTime(d.updatedAt) }}<template v-if="d.updatedBy"> by {{ d.updatedBy }}</template>
-                · {{ d.message.embeds.length }} embed{{ d.message.embeds.length === 1 ? "" : "s" }}
-                <template v-if="d.published">
-                  · published {{ formatDateTime(d.published.publishedAt) }}<template v-if="d.published.publishedBy"> by {{ d.published.publishedBy }}</template><template v-if="via(d.published.webhookId, d.published.savedWebhookId)"> via {{ via(d.published.webhookId, d.published.savedWebhookId) }}</template> ·
-                  <a :href="linkFor(d)" target="_blank" rel="noreferrer">open</a>
-                </template>
-                <template v-else-if="d.deleted">
-                  · published {{ formatDateTime(d.deleted.publishedAt) }}<template v-if="via(d.deleted.webhookId, d.deleted.savedWebhookId)"> via {{ via(d.deleted.webhookId, d.deleted.savedWebhookId) }}</template>,
-                  deleted from Discord {{ formatDateTime(d.deleted.deletedAt) }}<template v-if="d.deleted.deletedBy"> by {{ d.deleted.deletedBy }}</template>
-                </template>
+              <div v-if="isOpen(e.id)" class="draft-list group-children">
+                <MessageRow
+                  v-for="c in e.copies"
+                  :key="c.id"
+                  :d="c"
+                  :loading="loading"
+                  :just-added="justAdded"
+                  :copy-of="copyLabel(c)"
+                  @load="load"
+                  @history="(d) => { openHistory(d.id); emit('handoff'); }"
+                  @rename="rename"
+                  @duplicate="duplicate"
+                  @export="exportOne"
+                  @remove="remove"
+                  @server="(d, id) => setDraftServer(d.id, id)"
+                />
               </div>
             </div>
-            <div class="row row-nowrap">
-              <select v-if="servers.length" class="input draft-server-select" :value="d.serverId ?? ''" title="Server" @change="onServerChange(d, $event)">
-                <option value="">Unassigned</option>
-                <option v-for="s in servers" :key="s.id" :value="s.id">{{ s.name }}</option>
-              </select>
-              <button class="btn btn-sm btn-primary" :disabled="loading === d.id" @click="load(d)">{{ loading === d.id ? "Loading…" : "Load" }}</button>
-              <button class="btn btn-sm btn-ghost message-history" :disabled="!d.revision" title="Revision history" @click="openHistory(d.id); emit('handoff')">History</button>
-              <button class="btn btn-sm btn-ghost" title="Rename" @click="rename(d)">Rename</button>
-              <button class="btn btn-sm btn-ghost" @click="duplicate(d)">Duplicate</button>
-              <button class="btn btn-sm btn-ghost" @click="exportOne(d)">Export</button>
-              <button
-                class="btn btn-sm btn-danger"
-                :disabled="isHistory(d) && !canDelete"
-                :title="isHistory(d) ? (canDelete ? 'Remove from history' : 'You don\'t have permission to remove published messages') : 'Delete draft'"
-                @click="remove(d)"
-              >✕</button>
-            </div>
-          </div>
+          </template>
         </div>
       </div>
     </div>

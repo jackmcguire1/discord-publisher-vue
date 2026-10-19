@@ -59,6 +59,7 @@ describe("messages: published history", () => {
   it("duplicating from the Published filter switches to All and saves the copy to the org", () => {
     cy.contains(".nav-link", "Messages").click();
     cy.get('[data-filter="published"]').click();
+    cy.window().then((w) => cy.stub(w, "prompt").callsFake((_m: string, suggested: string) => suggested));
     cy.get(".draft-item").should("have.length", 1).contains("button", "Duplicate").click();
     cy.toast("Message duplicated");
     cy.get('[data-filter="all"]').should("have.attr", "aria-selected", "true");

@@ -61,8 +61,14 @@ describe("publishing to several webhooks", () => {
     cy.get("select.webhook-select").find("option:selected").should("have.text", "Hook A");
 
     cy.contains(".nav-link", "Messages").click();
-    cy.get(".messages-panel .draft-item").should("have.length", 2);
-    cy.get(".messages-panel .copies-tag").first().should("contain.text", "1 of 2 copies");
+    // One collapsible row for the group; expanding it shows each copy.
+    cy.get(".messages-panel .message-group").should("have.length", 1).and("contain.text", "Published to 2 webhooks");
+    cy.get(".messages-panel .draft-item").should("not.exist");
+    cy.get(".message-group .group-toggle").click();
+    cy.get(".group-children .draft-item").should("have.length", 2);
+    cy.get(".group-children .copies-tag").should("contain.text", "Hook A").and("contain.text", "Hook C");
+    cy.get(".message-group .group-toggle").click();
+    cy.get(".group-children").should("not.exist");
   });
 
   it("updates and deletes every copy, or just one", () => {

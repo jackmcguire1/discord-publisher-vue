@@ -74,6 +74,7 @@ Live site: **https://jackmcguire1.github.io/discord-publisher-vue/**
 - Switch the Publish panel to **Several webhooks** and tick the webhooks you want (only ones you can access, grouped by server), then **Publish to N webhooks**.
 - Each webhook gets its own copy, so server access, permissions and history work per copy; the copies are linked as a group.
 - While editing any copy, **Update all N copies** edits every copy on Discord and **Delete all copies** removes them all. The list under the buttons shows each copy with its own **Open** (switch the editor to it), **Update** and **✕**.
+- In **Messages**, the copies show as one collapsible row ("Published to N webhooks", with how many are live or deleted); expand it to see and act on each copy. A group sits under its server, or under "Several servers" when the copies span more than one.
 - A failing webhook doesn't stop the others: you're told which succeeded and which failed (and why). Copies whose webhook you can't access are skipped.
 - Thread IDs aren't used when publishing to several webhooks.
 
@@ -84,7 +85,7 @@ Live site: **https://jackmcguire1.github.io/discord-publisher-vue/**
 - **Load** on a published message selects the webhook it went through and pulls its current content from Discord, ready to update or delete.
 - **+ New message** (editor header, Messages page) starts a blank message, keeping your webhook identity and selected webhook. If the editor has unsaved changes it asks first: save as a draft, discard, or cancel. The header shows the message you're editing and whether it has unsaved changes.
 - **Versions**: saves, publishes and Discord updates are kept as numbered revisions (v1, v2, …) with who made them and when. **Update draft** saves over the current version, so iterating doesn't pile up versions; **New version** keeps the current one and saves your changes as the next. v1 (the starting point) and versions that went out to Discord are never saved over: updating from those starts the next version. **History** (in the Messages list, or the `vN · History` button in the editor header) lists them with a preview of each; **Restore** opens an old version in the editor as unsaved changes, so saving or updating records it as a new revision and nothing is lost. Saved versions can be deleted from History; versions that were published or updated on Discord can't, and stay as the record of what went out. Duplicates start their own history.
-- Save, rename, duplicate, delete, export and import drafts. A message named after its content (the suggested name, or a duplicate's "(copy)" name) follows its title as you edit; once you type or rename a name yourself, it stays.
+- Save, rename, duplicate, delete, export and import drafts. **Duplicate** asks for a name, pre-filled with "… (copy)". A message named after its content (the suggested name, or a duplicate's "(copy)" name) follows its title as you edit; once you type or rename a name yourself, it stays.
 - Publishing automatically creates a draft if you have not saved one, so every send is tracked.
 - Drafts record when they were last updated and when and where they were published.
 - Drafts are grouped by server. A published draft is filed under its webhook's server automatically; you can move any draft between servers from the list.

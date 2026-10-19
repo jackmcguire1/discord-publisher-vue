@@ -449,3 +449,11 @@ select.nav-org option { background: var(--bg-1); color: var(--text); }
 .destination-group { display: flex; flex-direction: column; gap: 6px; }
 .destination-group .group-label { margin: 0; }
 .group-copies .group-label { margin-bottom: 6px; }
+
+.message-group { flex-direction: column; align-items: stretch; gap: 4px; }
+.group-toggle {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  width: 100%; padding: 0; border: none; background: none; text-align: left; cursor: pointer;
+}
+.group-children { margin-top: 8px; padding-left: 14px; border-left: 2px solid var(--border); }
+.copy-row .copies-tag { background: rgba(88, 101, 242, .2); color: var(--text-strong); }

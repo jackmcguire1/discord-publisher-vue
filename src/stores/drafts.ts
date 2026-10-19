@@ -267,10 +267,16 @@ export function markDeleted(id: string) {
   });
 }
 
-export function duplicateDraft(id: string): Draft | undefined {
+export function duplicateDraft(id: string, name?: string): Draft | undefined {
   const d = getDraft(id);
   if (!d) return;
-  return createDraft(`${d.name} (copy)`, d.message, d.serverId, { note: `Duplicated from "${d.name}"`, autoName: followsContent(d) });
+  const suggested = `${d.name} (copy)`;
+  const chosen = name?.trim() || suggested;
+  // Keeping the suggested "(copy)" name follows the content like the original; a typed name stays.
+  return createDraft(chosen, d.message, d.serverId, {
+    note: `Duplicated from "${d.name}"`,
+    autoName: chosen === suggested ? followsContent(d) : false,
+  });
 }
 
 /** Link a message into a group of copies. */

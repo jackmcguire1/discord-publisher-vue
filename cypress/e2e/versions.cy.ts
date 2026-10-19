@@ -86,7 +86,11 @@ describe("message versions", () => {
 
   it("opens from the Messages list, and a duplicate starts its own history", () => {
     cy.visitClean();
-    cy.window().then((w) => cy.stub(w, "prompt").returns("Original"));
+    cy.window().then((w) => {
+      const stub = cy.stub(w, "prompt");
+      stub.onFirstCall().returns("Original");
+      stub.onSecondCall().callsFake((_m: string, suggested: string) => suggested);
+    });
     cy.contains("button", "Save draft").click();
     cy.contains(".nav-link", "Messages").click();
     cy.get(".draft-item .revision-tag").should("have.text", "v1");
