@@ -69,6 +69,14 @@ Live site: **https://jackmcguire1.github.io/discord-publisher-vue/**
 - **JSON**: view the exact payload that will be sent, copy it, download it, paste a payload from anywhere, or import a file, then apply it back to the editor. Hex colour strings and `null` fields from other tools are handled.
 - **cURL**: a ready-to-run command for sending or editing, copyable or downloadable as a shell script.
 
+### Publishing to several webhooks
+
+- Switch the Publish panel to **Several webhooks** and tick the webhooks you want (only ones you can access, grouped by server), then **Publish to N webhooks**.
+- Each webhook gets its own copy, so server access, permissions and history work per copy; the copies are linked as a group.
+- While editing any copy, **Update all N copies** edits every copy on Discord and **Delete all copies** removes them all. The list under the buttons shows each copy with its own **Open** (switch the editor to it), **Update** and **✕**.
+- A failing webhook doesn't stop the others: you're told which succeeded and which failed (and why). Copies whose webhook you can't access are skipped.
+- Thread IDs aren't used when publishing to several webhooks.
+
 ### Messages: drafts and sent history
 
 - **Messages** in the navigation bar (or the toolbar, as a quick dialog) lists drafts, published messages and messages deleted from Discord, with filters for each.

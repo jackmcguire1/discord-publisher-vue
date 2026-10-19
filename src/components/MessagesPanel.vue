@@ -9,6 +9,7 @@ import {
   exportDrafts,
   importDrafts,
   statusOf,
+  groupCopies,
   type Draft,
   type MessageStatus,
 } from "../stores/drafts";
@@ -218,6 +219,9 @@ async function importFiles(e: Event) {
             <div class="grow">
               <div class="row">
                 <span class="draft-name">{{ d.name }}</span>
+                <span v-if="groupCopies(d.groupId).length > 1" class="tag copies-tag" title="Published to several webhooks; each copy is listed">
+                  1 of {{ groupCopies(d.groupId).length }} copies
+                </span>
                 <span v-if="d.revision" class="tag revision-tag" :title="`${d.revision} revision${d.revision === 1 ? '' : 's'}`">v{{ d.revision }}</span>
                 <span v-if="d.id === currentDraftId" class="tag">editing</span>
                 <span v-if="d.published" class="tag tag-green">published</span>

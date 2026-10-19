@@ -3,8 +3,10 @@ import { ref, computed } from "vue";
 import { settings, webhookInfo } from "../stores/settings";
 import { savedWebhooks, getWebhook, selectWebhook, webhookByDiscordId, selectedWebhookServerId } from "../stores/webhooks";
 import { servers, getServer, guildIdFor } from "../stores/servers";
-import { message, isValid, errors, showErrors, currentDraftId, markClean } from "../stores/message";
-import { getDraft, createDraft, updateDraftMessage, setDraftServer, markPublished, markUpdated, markDeleted } from "../stores/drafts";
+import { message, isValid, errors, showErrors, currentDraftId, markClean, replaceMessage } from "../stores/message";
+import { getDraft, createDraft, updateDraftMessage, setDraftServer, markPublished, markUpdated, markDeleted, groupCopies, type Draft } from "../stores/drafts";
+import { publishToMany, updateCopies, deleteCopies, summarize, webhookForCopy, type Outcome } from "../stores/fanout";
+import { selectWebhookFor } from "../stores/editorActions";
 import { sendMessage, editMessage, deleteMessage, messageLink, type DiscordApiError } from "../discord/webhook";
 import { toast } from "../stores/toasts";
 import { canManage, canPublish, canDelete } from "../stores/session";
@@ -20,13 +22,14 @@ const publishedVia = computed(() => webhookByDiscordId(published.value?.webhookI
 const selectedServer = computed(() => getServer(selected.value?.serverId));
 
 /** Webhooks grouped by server for the <optgroup> dropdown; ungrouped ones listed flat. */
+const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name);
 const webhookGroups = computed(() =>
   servers.value
-    .map((s) => ({ server: s, webhooks: savedWebhooks.value.filter((w) => w.serverId === s.id) }))
+    .map((s) => ({ server: s, webhooks: savedWebhooks.value.filter((w) => w.serverId === s.id).sort(byName) }))
     .filter((g) => g.webhooks.length)
 );
 const ungroupedWebhooks = computed(() =>
-  savedWebhooks.value.filter((w) => !w.serverId || !getServer(w.serverId))
+  savedWebhooks.value.filter((w) => !w.serverId || !getServer(w.serverId)).sort(byName)
 );
 const publishedLink = computed(() =>
   published.value ? messageLink(published.value, guildIdFor(draft.value?.serverId)) : "#"
@@ -59,6 +62,11 @@ function describe(e: unknown): string {
   return `${err.message}${err.status ? ` (HTTP ${err.status})` : ""}${detail}`.slice(0, 400);
 }
 
+function defaultName(): string {
+  const first = message.value.embeds[0];
+  return first?.title || message.value.content.split("\n")[0].slice(0, 60) || `Message ${new Date().toLocaleString()}`;
+}
+
 /**
  * Make sure there is a draft to track this publish. A message that has
  * already been published (or deleted from Discord) keeps its history, so
@@ -73,10 +81,7 @@ function ensureDraft(): string {
     if (!existing.serverId && selectedWebhookServerId()) setDraftServer(currentDraftId.value, selectedWebhookServerId());
     return currentDraftId.value;
   }
-  const first = message.value.embeds[0];
-  const name =
-    first?.title || message.value.content.split("\n")[0].slice(0, 60) || `Message ${new Date().toLocaleString()}`;
-  const d = createDraft(existing?.name ?? name, message.value, existing?.serverId ?? selectedWebhookServerId(), { revision: false });
+  const d = createDraft(existing?.name ?? defaultName(), message.value, existing?.serverId ?? selectedWebhookServerId(), { revision: false });
   currentDraftId.value = d.id;
   if (!existing) toast("info", "Draft saved", `Tracking this message as "${d.name}".`);
   return d.id;
@@ -98,6 +103,109 @@ async function publish() {
   } finally {
     busy.value = "";
   }
+}
+
+// --- several webhooks at once ------------------------------------------------
+
+/** Publishing to a picked set of saved webhooks instead of the single one above. */
+const multi = ref(false);
+const destinations = ref<string[]>([]);
+/** Checklist sections: each accessible server with its webhooks, then unfiled ones. */
+const checklist = computed(() => [
+  ...webhookGroups.value.map((g) => ({ label: g.server.name, webhooks: g.webhooks })),
+  ...(ungroupedWebhooks.value.length ? [{ label: "No server", webhooks: ungroupedWebhooks.value }] : []),
+]);
+/** Picked webhooks in checklist order, so the editor keeps the first one's copy predictably. */
+const destinationWebhooks = computed(() =>
+  checklist.value.flatMap((g) => g.webhooks).filter((w) => destinations.value.includes(w.id))
+);
+
+function toggleDestination(id: string, on: boolean) {
+  destinations.value = on ? [...new Set([...destinations.value, id])] : destinations.value.filter((x) => x !== id);
+}
+
+/** The copies of the message being edited, when it was published to several webhooks. */
+const copies = computed(() => groupCopies(draft.value?.groupId));
+const grouped = computed(() => copies.value.length > 1);
+const liveCopies = computed(() => copies.value.filter((c) => c.published));
+
+function report(action: string, outcomes: Outcome[]) {
+  if (!outcomes.length) return;
+  const { ok, total, detail } = summarize(outcomes);
+  if (ok === total) toast("success", `${action} ${total} webhook${total === 1 ? "" : "s"}`);
+  else toast(ok ? "info" : "error", `${action} ${ok} of ${total} webhooks`, detail, 12000);
+}
+
+async function publishMany() {
+  if (!destinationWebhooks.value.length || !isValid.value || !canPublish.value) return;
+  busy.value = "send";
+  try {
+    const name = (draft.value && !draft.value.published && !draft.value.deleted && draft.value.name) || defaultName();
+    const { outcomes, editorDraftId } = await publishToMany(destinationWebhooks.value, message.value, name, ensureDraft);
+    if (editorDraftId) {
+      markClean();
+      destinations.value = [];
+      multi.value = false;
+      // The editor holds the first copy; select its webhook so single actions match it.
+      const d = getDraft(editorDraftId);
+      if (d) selectWebhookFor(d);
+    }
+    report("Published to", outcomes);
+  } finally {
+    busy.value = "";
+  }
+}
+
+async function updateAll() {
+  if (!liveCopies.value.length || !isValid.value || !canPublish.value) return;
+  busy.value = "edit";
+  try {
+    const outcomes = await updateCopies(liveCopies.value, message.value);
+    if (outcomes.some((o) => o.ok)) markClean();
+    report("Updated", outcomes);
+  } finally {
+    busy.value = "";
+  }
+}
+
+async function deleteAll() {
+  if (!liveCopies.value.length || !canDelete.value) return;
+  if (!confirm(`Delete this message from all ${liveCopies.value.length} webhooks on Discord? The copies stay in Messages as deleted.`)) return;
+  busy.value = "delete";
+  try {
+    report("Deleted from", await deleteCopies(liveCopies.value));
+  } finally {
+    busy.value = "";
+  }
+}
+
+async function updateOne(c: Draft) {
+  busy.value = "edit";
+  try {
+    report("Updated", await updateCopies([c], message.value));
+  } finally {
+    busy.value = "";
+  }
+}
+
+async function deleteOne(c: Draft) {
+  if (!confirm(`Delete the copy sent to ${webhookForCopy(c)?.name ?? "this webhook"} from Discord?`)) return;
+  busy.value = "delete";
+  try {
+    report("Deleted from", await deleteCopies([c]));
+  } finally {
+    busy.value = "";
+  }
+}
+
+/** Switch the editor to another copy (its own webhook gets selected). */
+function openCopy(c: Draft) {
+  replaceMessage(JSON.parse(JSON.stringify(c.message)), c.id);
+  selectWebhookFor(c);
+}
+
+function copyLink(c: Draft): string {
+  return c.published ? messageLink(c.published, guildIdFor(c.serverId)) : "#";
 }
 
 async function update() {
@@ -140,6 +248,26 @@ async function remove() {
       </div>
     </header>
     <div class="panel-body">
+      <div v-if="savedWebhooks.length > 1" class="row row-between publish-mode">
+        <div class="btn-group" role="tablist" aria-label="Destination">
+          <button class="btn btn-sm" :class="multi ? 'btn-ghost' : 'btn-primary'" role="tab" :aria-selected="!multi" @click="multi = false">One webhook</button>
+          <button class="btn btn-sm mode-multi" :class="multi ? 'btn-primary' : 'btn-ghost'" role="tab" :aria-selected="multi" @click="multi = true">Several webhooks</button>
+        </div>
+        <span v-if="multi" class="muted small">{{ destinations.length }} selected</span>
+      </div>
+
+      <div v-if="multi" class="destinations">
+        <div v-for="g in checklist" :key="g.label" class="destination-group">
+          <div class="group-label">{{ g.label }}</div>
+          <label v-for="w in g.webhooks" :key="w.id" class="checkbox destination">
+            <input type="checkbox" :value="w.id" :checked="destinations.includes(w.id)" @change="toggleDestination(w.id, ($event.target as HTMLInputElement).checked)" />
+            {{ w.name }}<span v-if="w.description" class="muted small"> · {{ w.description }}</span>
+          </label>
+        </div>
+        <p class="muted small" style="margin: 0">Each webhook gets its own copy, linked together so you can update or delete them all later. Thread IDs aren't used here.</p>
+      </div>
+
+      <template v-else>
       <div class="publish-grid">
         <Field label="Webhook" :hint="[selectedServer?.name, selected?.description].filter(Boolean).join(' · ') || (savedWebhooks.length ? `${savedWebhooks.length} saved` : 'none saved yet')">
           <div class="row row-nowrap">
@@ -184,6 +312,7 @@ async function remove() {
           <button v-if="canManage && !selected && webhookInfo" class="btn btn-ghost btn-sm" title="Save this URL with a nickname" @click="emit('manage')">Save…</button>
         </div>
       </Field>
+      </template>
 
       <div v-if="!isValid && showErrors" class="banner banner-error">
         <span>⚠</span>
@@ -191,7 +320,40 @@ async function remove() {
       </div>
 
       <div class="row row-between">
-        <div class="row">
+        <div v-if="multi" class="row">
+          <button
+            class="btn btn-success publish-many"
+            :disabled="!destinations.length || !isValid || !!busy || !canPublish"
+            :title="!canPublish ? 'You don\'t have permission to publish in this organization' : ''"
+            @click="publishMany"
+          >
+            {{ busy === "send" ? "Publishing…" : `Publish to ${destinations.length} webhook${destinations.length === 1 ? "" : "s"}` }}
+          </button>
+        </div>
+        <div v-else-if="grouped" class="row">
+          <button class="btn btn-success" :disabled="!webhookInfo || !isValid || !!busy || !canPublish" @click="publish">
+            {{ busy === "send" ? "Publishing…" : "Publish as new" }}
+          </button>
+          <button
+            v-if="liveCopies.length"
+            class="btn btn-primary update-all"
+            :disabled="!isValid || !!busy || !canPublish"
+            :title="canPublish ? 'Edit every copy on Discord' : 'You don\'t have permission to publish in this organization'"
+            @click="updateAll"
+          >
+            {{ busy === "edit" ? "Updating…" : `Update all ${liveCopies.length} copies` }}
+          </button>
+          <button
+            v-if="liveCopies.length"
+            class="btn btn-danger delete-all"
+            :disabled="!!busy || !canDelete"
+            :title="canDelete ? '' : 'You don\'t have permission to delete messages in this organization'"
+            @click="deleteAll"
+          >
+            {{ busy === "delete" ? "Deleting…" : "Delete all copies" }}
+          </button>
+        </div>
+        <div v-else class="row">
           <button
             class="btn btn-success"
             :disabled="!webhookInfo || !isValid || !!busy || !canPublish"
@@ -221,7 +383,37 @@ async function remove() {
         </div>
       </div>
 
-      <div v-if="published && !isDismissed(`published:${published.messageId}`)" class="banner banner-success small">
+      <div v-if="grouped" class="group-copies">
+        <div class="group-label">Published to {{ copies.length }} webhooks</div>
+        <div class="draft-list">
+          <div v-for="c in copies" :key="c.id" class="draft copy-item" :class="{ active: c.id === draft?.id }">
+            <div class="grow">
+              <div class="row">
+                <span class="draft-name">{{ webhookForCopy(c)?.name ?? "Webhook not available to you" }}</span>
+                <span v-if="getServer(c.serverId)" class="muted small">{{ getServer(c.serverId)!.name }}</span>
+                <span v-if="c.published" class="tag tag-green">published</span>
+                <span v-else-if="c.deleted" class="tag tag-red">deleted</span>
+                <span v-if="c.id === draft?.id" class="tag">editing</span>
+              </div>
+              <div class="draft-meta">
+                <template v-if="c.published">
+                  {{ formatDateTime(c.published.updatedAt ?? c.published.publishedAt) }}
+                  · <a :href="copyLink(c)" target="_blank" rel="noreferrer">open in Discord</a>
+                </template>
+                <template v-else-if="c.deleted">deleted {{ formatDateTime(c.deleted.deletedAt) }}</template>
+              </div>
+            </div>
+            <div class="row row-nowrap">
+              <button v-if="c.id !== draft?.id" class="btn btn-sm btn-ghost copy-open" @click="openCopy(c)">Open</button>
+              <template v-if="c.published && webhookForCopy(c)">
+                <button class="btn btn-sm btn-ghost copy-update" :disabled="!!busy || !canPublish || !isValid" @click="updateOne(c)">Update</button>
+                <button class="btn btn-sm btn-danger copy-delete" :disabled="!!busy || !canDelete" @click="deleteOne(c)">✕</button>
+              </template>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div v-else-if="published && !isDismissed(`published:${published.messageId}`)" class="banner banner-success small">
         <span>✓</span>
         <span>
           Published {{ formatDateTime(published.publishedAt) }}<template v-if="published.publishedBy"> by {{ published.publishedBy }}</template><template v-if="publishedVia"> via <strong>{{ publishedVia.name }}</strong></template> ·

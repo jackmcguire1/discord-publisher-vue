@@ -38,6 +38,8 @@ export interface Draft {
   deleted?: PublishInfo & { deletedAt: string; deletedBy?: string };
   /** Number of the latest revision (see revisions.ts); 0 before the first, absent on messages from before versioning. */
   revision?: number;
+  /** Shared by the copies of a message published to several webhooks at once (one copy per webhook). */
+  groupId?: string;
   /** Id and kind of the latest revision, so "Update draft" can save over it. */
   revisionId?: string;
   revisionKind?: RevisionKind;
@@ -242,6 +244,22 @@ export function duplicateDraft(id: string): Draft | undefined {
   const d = getDraft(id);
   if (!d) return;
   return createDraft(`${d.name} (copy)`, d.message, d.serverId, { note: `Duplicated from "${d.name}"` });
+}
+
+/** Link a message into a group of copies. */
+export function setGroup(id: string, groupId: string) {
+  store.update(id, { groupId });
+}
+
+/** A fresh id for a group of copies. */
+export function newGroupId(): string {
+  return store.newId();
+}
+
+/** The copies of a grouped message that this user can see, oldest first. */
+export function groupCopies(groupId: string | undefined): Draft[] {
+  if (!groupId) return [];
+  return state.value.filter((d) => d.groupId === groupId).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
 
 export function deleteDraft(id: string) {
