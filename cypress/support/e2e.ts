@@ -36,6 +36,25 @@ declare global {
   }
 }
 
+// The app keeps a persistent Firestore cache in IndexedDB, which Cypress
+// doesn't clear between tests. Tests wipe the emulators and localStorage, so a
+// leftover cache would describe data that no longer exists. Every visit starts
+// from an empty cache, like a fresh browser. (Deletion is queued before the
+// app opens the database, so the app waits for it.)
+const FIRESTORE_CACHE_DB = `firestore/[DEFAULT]/${PROJECT}/main`;
+Cypress.Commands.overwrite("visit", (originalVisit, url, options) => {
+  const opts = (typeof url === "object" ? url : options ?? {}) as Partial<Cypress.VisitOptions>;
+  const onBeforeLoad = opts.onBeforeLoad;
+  const withReset = {
+    ...opts,
+    onBeforeLoad(win: Cypress.AUTWindow) {
+      win.indexedDB.deleteDatabase(FIRESTORE_CACHE_DB);
+      onBeforeLoad?.(win);
+    },
+  };
+  return typeof url === "object" ? originalVisit(withReset as Cypress.VisitOptions) : originalVisit(url, withReset);
+});
+
 Cypress.Commands.add("resetEmulators", () => {
   cy.request("DELETE", FIRESTORE_EMULATOR);
   cy.request("DELETE", `${AUTH_EMULATOR}/accounts`);

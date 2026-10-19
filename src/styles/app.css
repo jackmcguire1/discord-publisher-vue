@@ -460,3 +460,5 @@ select.nav-org option { background: var(--bg-1); color: var(--text); }
 
 .webhook-history { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
 .webhook-history-summary { gap: 10px; }
+
+.message-search { max-width: 420px; }

@@ -47,22 +47,46 @@ export function orgCollection<T extends { id: string }>(
   let stops: (() => void)[] = [];
   const guest = () => authReady.value && !user.value;
 
+  // Local writes not yet confirmed by Firestore. Snapshots can arrive that were
+  // taken before a write reached the (IndexedDB-backed) cache; without this,
+  // a just-added item would vanish and reappear, or an edit briefly revert.
+  // Each entry is dropped once its write settles, after which snapshots carry it.
+  const pendingSets = new Map<string, T>();
+  const pendingPatches = new Map<string, { patch: Record<string, unknown>; writes: number }>();
+  const pendingRemoves = new Set<string>();
+  let results: T[][] = [];
+
+  /** Publish the union of the listeners' results with pending local writes on top. */
+  function publish() {
+    const byId = new Map<string, T>();
+    for (const list of results) for (const item of list) byId.set(item.id, item);
+    for (const [id, item] of pendingSets) byId.set(id, item);
+    for (const [id, { patch }] of pendingPatches) {
+      const item = byId.get(id);
+      if (item) byId.set(id, { ...item, ...patch });
+    }
+    for (const id of pendingRemoves) byId.delete(id);
+    items.value = [...byId.values()];
+  }
+
+  function clearPending() {
+    pendingSets.clear();
+    pendingPatches.clear();
+    pendingRemoves.clear();
+  }
+
   watch(
     [activeOrgId, guest, () => opts.constraintsKey?.() ?? ""],
     ([orgId, isGuest]) => {
       stops.forEach((f) => f());
       stops = [];
+      clearPending();
       items.value = isGuest ? load<T[]>(name, []) : [];
       const constraints = opts.constraints ? opts.constraints() : [];
       if (!orgId || constraints === null) return;
       const sets = (Array.isArray(constraints[0]) ? constraints : [constraints]) as QueryConstraint[][];
       // One listener per filter set; each keeps its own results and the union is published.
-      const results: T[][] = sets.map(() => []);
-      const publish = () => {
-        const byId = new Map<string, T>();
-        for (const list of results) for (const item of list) byId.set(item.id, item);
-        items.value = [...byId.values()];
-      };
+      results = sets.map(() => []);
       stops = sets.map((set, i) =>
         onSnapshot(
           query(collection(db, "orgs", orgId, name), ...set),
@@ -86,10 +110,17 @@ export function orgCollection<T extends { id: string }>(
     toast("error", `Could not save ${name}`, e.message);
   }
 
-  /** For guests, write the array through to localStorage; otherwise run the Firestore write. */
-  function commit(remote: () => Promise<unknown>) {
-    if (guest()) save(name, items.value);
-    else remote().catch(failed);
+  /**
+   * Run a Firestore write and, once it settles, drop its pending overlay.
+   * Guests just write the array through to localStorage.
+   */
+  function commit(remote: () => Promise<unknown>, settle: () => void) {
+    remote()
+      .catch(failed)
+      .finally(() => {
+        settle();
+        publish();
+      });
   }
 
   return {
@@ -100,18 +131,47 @@ export function orgCollection<T extends { id: string }>(
       const i = items.value.findIndex((x) => x.id === id);
       if (i >= 0) items.value[i] = item;
       else items.value.push(item);
-      commit(() => setDoc(doc(col(), id), data));
+      if (guest()) return save(name, items.value);
+      pendingRemoves.delete(id);
+      pendingSets.set(id, item);
+      commit(
+        () => setDoc(doc(col(), id), data),
+        () => {
+          if (pendingSets.get(id) === item) pendingSets.delete(id);
+        }
+      );
     },
     update(id, patch) {
       const item = items.value.find((x) => x.id === id);
       if (item) Object.assign(item, patch);
+      if (guest()) return save(name, items.value);
+      // Keep a pending set in step, and overlay the patch until this write settles.
+      const queued = pendingSets.get(id);
+      if (queued && queued !== item) Object.assign(queued, patch);
+      const entry = pendingPatches.get(id);
+      pendingPatches.set(id, { patch: { ...(entry?.patch ?? {}), ...patch }, writes: (entry?.writes ?? 0) + 1 });
       const data: Record<string, unknown> = {};
       for (const [k, v] of Object.entries(patch)) data[k] = v === undefined ? deleteField() : v;
-      commit(() => updateDoc(doc(col(), id), data));
+      commit(
+        () => updateDoc(doc(col(), id), data),
+        () => {
+          const e = pendingPatches.get(id);
+          if (!e) return;
+          if (e.writes <= 1) pendingPatches.delete(id);
+          else e.writes--;
+        }
+      );
     },
     remove(id) {
       items.value = items.value.filter((x) => x.id !== id);
-      commit(() => deleteDoc(doc(col(), id)));
+      if (guest()) return save(name, items.value);
+      pendingSets.delete(id);
+      pendingPatches.delete(id);
+      pendingRemoves.add(id);
+      commit(
+        () => deleteDoc(doc(col(), id)),
+        () => pendingRemoves.delete(id)
+      );
     },
   };
 }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { messagesForWebhook } from "../stores/webhookHistory";
 import { guildIdFor } from "../stores/servers";
 import { messageLink } from "../discord/webhook";
@@ -14,6 +14,10 @@ const props = defineProps<{ webhook: SavedWebhook }>();
 const emit = defineEmits<{ open: [d: Draft] }>();
 
 const messages = computed(() => messagesForWebhook(props.webhook));
+/** Long histories render 20 at a time. */
+const PAGE = 20;
+const limit = ref(PAGE);
+const visible = computed(() => messages.value.slice(0, limit.value));
 const live = computed(() => messages.value.filter((d) => d.published).length);
 const lastUsed = computed(() => {
   const m = messages.value[0];
@@ -37,7 +41,7 @@ function link(d: Draft): string {
         <span v-if="lastUsed" class="muted">last used {{ formatDateTime(lastUsed) }}</span>
       </div>
       <div class="draft-list">
-        <div v-for="d in messages" :key="d.id" class="draft webhook-history-item">
+        <div v-for="d in visible" :key="d.id" class="draft webhook-history-item">
           <div class="grow">
             <div class="row">
               <span class="draft-name">{{ d.name }}</span>
@@ -57,6 +61,10 @@ function link(d: Draft): string {
           </div>
           <button class="btn btn-sm btn-ghost webhook-history-open" @click="emit('open', d)">Open</button>
         </div>
+      </div>
+      <div v-if="messages.length > PAGE" class="row row-between">
+        <span class="muted small">Showing {{ visible.length }} of {{ messages.length }}</span>
+        <button v-if="visible.length < messages.length" class="btn btn-sm webhook-history-more" @click="limit += PAGE">Show more</button>
       </div>
     </template>
   </div>

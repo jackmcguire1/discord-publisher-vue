@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, nextTick } from "vue";
+import { ref, computed, nextTick, watch } from "vue";
 import {
   drafts,
   deleteDraft,
@@ -40,7 +40,22 @@ const counts = computed(() => {
   for (const d of drafts.value) c[statusOf(d)]++;
   return c;
 });
-const shown = computed(() => (filter.value === "all" ? drafts.value : drafts.value.filter((d) => statusOf(d) === filter.value)));
+// --- search ---------------------------------------------------------------------
+
+const search = ref("");
+
+/** Everything a message can be found by: name, text, embed text, webhook and server. */
+function haystack(d: Draft): string {
+  const m = d.message;
+  const embedText = (m.embeds ?? []).flatMap((e) => [e.title, e.description, e.author?.name, e.footer?.text, ...(e.fields ?? []).flatMap((f) => [f.name, f.value])]);
+  return [d.name, m.content, ...embedText, webhookForCopy(d)?.name, getServer(d.serverId)?.name].filter(Boolean).join("\n").toLowerCase();
+}
+
+const shown = computed(() => {
+  const byStatus = filter.value === "all" ? drafts.value : drafts.value.filter((d) => statusOf(d) === filter.value);
+  const q = search.value.trim().toLowerCase();
+  return q ? byStatus.filter((d) => haystack(d).includes(q)) : byStatus;
+});
 
 /** A row in the list: one message, or the copies of a message published to several webhooks. */
 type Entry = { kind: "single"; d: Draft } | { kind: "group"; id: string; copies: Draft[] };
@@ -80,6 +95,29 @@ const sections = computed(() => {
     { key: "none", label: servers.value.length ? "Unassigned" : "", entries: pick("none") },
   ].filter((sec) => sec.entries.length);
 });
+
+// --- paging -----------------------------------------------------------------------
+// Rows render 50 at a time (a group of copies is one row); all messages are
+// still loaded, so groups, webhook history and search see everything.
+
+const PAGE = 50;
+const limit = ref(PAGE);
+watch([filter, search], () => (limit.value = PAGE));
+
+const totalRows = computed(() => sections.value.reduce((n, sec) => n + sec.entries.length, 0));
+/** The sections cut down to the first `limit` rows, in display order. */
+const pagedSections = computed(() => {
+  let left = limit.value;
+  const out: typeof sections.value = [];
+  for (const sec of sections.value) {
+    if (left <= 0) break;
+    const entries = sec.entries.slice(0, left);
+    left -= entries.length;
+    out.push({ ...sec, entries });
+  }
+  return out;
+});
+const shownRows = computed(() => Math.min(limit.value, totalRows.value));
 
 const expanded = ref<string[]>([]);
 const isOpen = (id: string) => expanded.value.includes(id);
@@ -233,8 +271,15 @@ async function importFiles(e: Event) {
           {{ f.label }} <span class="tag">{{ counts[f.id] }}</span>
         </button>
       </div>
-      <div v-if="!shown.length" class="empty">Nothing here.</div>
-      <div v-for="sec in sections" :key="sec.key" class="draft-group">
+      <input
+        v-model="search"
+        type="search"
+        class="input message-search"
+        placeholder="Search by name, text, webhook or server"
+        aria-label="Search messages"
+      />
+      <div v-if="!shown.length" class="empty">{{ search.trim() ? `Nothing matches “${search.trim()}”.` : "Nothing here." }}</div>
+      <div v-for="sec in pagedSections" :key="sec.key" class="draft-group">
         <div class="group-label">{{ sec.label }}</div>
         <div class="draft-list">
           <template v-for="e in sec.entries" :key="e.kind === 'single' ? e.d.id : e.id">
@@ -284,6 +329,13 @@ async function importFiles(e: Event) {
           </template>
         </div>
       </div>
+    </div>
+
+    <div v-if="totalRows > PAGE" class="row row-between messages-paging">
+      <span class="muted small paging-status">Showing {{ shownRows }} of {{ totalRows }}</span>
+      <button v-if="shownRows < totalRows" class="btn btn-sm show-more" @click="limit += PAGE">
+        Show {{ Math.min(PAGE, totalRows - shownRows) }} more
+      </button>
     </div>
 
     <div class="row messages-actions">

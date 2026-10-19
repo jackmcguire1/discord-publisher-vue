@@ -84,6 +84,7 @@ In **Settings → Webhooks and servers** (or the Manage dialog) each webhook sho
 
 ### Messages: drafts and sent history
 
+- **Search** finds messages by name, text, embed text, webhook or server; long lists show 50 rows at a time with **Show more** (webhook histories show 20).
 - **Messages** in the navigation bar (or the toolbar, as a quick dialog) lists drafts, published messages and messages deleted from Discord, with filters for each.
 - Every publish is recorded with who published it, when, through which webhook, and who last updated it. Deleting from Discord keeps the message as history (marked deleted) instead of losing it; publishing it again creates a new message.
 - **Load** on a published message selects the webhook it went through and pulls its current content from Discord, ready to update or delete.
@@ -287,6 +288,8 @@ As a **guest**, nothing leaves your browser except messages sent to Discord: web
 When **signed in**, shared data (webhooks, servers, authors, drafts) is stored in Firestore under your organization, readable only by its members. Firestore encrypts it at rest.
 
 Webhook URLs contain a secret token. **Every member of an organization can read the full URLs of its saved webhooks**, because their browser sends messages to Discord directly. Only invite people you would trust with the webhooks themselves. Drafts record the webhook **ID** and the published message ID, never the token, so exported draft files are safe to share. The cURL export includes the full webhook URL, so treat that output as sensitive.
+
+Signed in, Firestore keeps a cache of your organization's data in this browser (IndexedDB) so reloads are quick and only fetch changes. **Signing out deletes that cache**, so nothing from the organization stays on the device.
 
 Signed in, a few things still stay in this browser's `localStorage`, under the `discord-publisher:` prefix:
 

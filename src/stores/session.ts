@@ -7,7 +7,7 @@ import {
   signOut as fbSignOut,
   type User,
 } from "firebase/auth";
-import { collection, collectionGroup, doc, onSnapshot, query, where, writeBatch } from "firebase/firestore";
+import { clearIndexedDbPersistence, collection, collectionGroup, doc, onSnapshot, query, terminate, where, writeBatch } from "firebase/firestore";
 import { auth, db } from "../firebase";
 import { load, save } from "./persist";
 
@@ -172,8 +172,21 @@ export async function completeSignInFromLink(): Promise<string | null> {
   }
 }
 
-export function signOut() {
-  return fbSignOut(auth);
+/**
+ * Sign out and wipe this device's Firestore cache (messages, webhook URLs…),
+ * so nothing from the org stays behind, e.g. on a shared computer. Clearing
+ * needs Firestore shut down, so the page reloads into guest mode afterwards.
+ */
+export async function signOut() {
+  await fbSignOut(auth);
+  try {
+    await terminate(db);
+    await clearIndexedDbPersistence(db);
+  } catch (e) {
+    // Another tab may still hold the cache open; it's cleared next time.
+    console.warn("Could not clear the offline cache", e);
+  }
+  window.location.assign(new URL(import.meta.env.BASE_URL, window.location.origin).toString());
 }
 
 // --- live listeners --------------------------------------------------------------

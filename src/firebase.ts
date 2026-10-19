@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { initializeAuth, browserLocalPersistence, connectAuthEmulator } from "firebase/auth";
-import { initializeFirestore, connectFirestoreEmulator } from "firebase/firestore";
+import { initializeFirestore, connectFirestoreEmulator, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
 
 // Config comes from .env (production) or .env.development (emulators). None of
 // it is secret; the security rules in firebase/ are what protect the data.
@@ -19,7 +19,12 @@ export const app = initializeApp({
 export const auth = initializeAuth(app, { persistence: browserLocalPersistence });
 
 // Editor state carries optional fields as `undefined`; Firestore should drop them.
-export const db = initializeFirestore(app, { ignoreUndefinedProperties: true });
+// The persistent cache (IndexedDB, shared between tabs) lets reloads start from
+// what's already on this device and fetch only changes; signOut() clears it.
+export const db = initializeFirestore(app, {
+  ignoreUndefinedProperties: true,
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+});
 
 export const usingEmulators = env.VITE_FIREBASE_EMULATORS === "true";
 
