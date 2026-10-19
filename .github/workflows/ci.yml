@@ -22,11 +22,11 @@ jobs:
           cache: yarn
       - run: yarn install --frozen-lockfile
       # The Firebase emulators need Java; cache their downloaded jars.
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 21
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.cache/firebase/emulators
           key: firebase-emulators-${{ hashFiles('yarn.lock') }}
