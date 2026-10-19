@@ -37,7 +37,7 @@ export function webhookForCopy(d: Draft): SavedWebhook | undefined {
 export async function publishToMany(
   webhooks: SavedWebhook[],
   message: Message,
-  name: string,
+  naming: { name: string; autoName: boolean },
   firstDraft: () => string
 ): Promise<{ outcomes: Outcome[]; editorDraftId: string | null }> {
   const groupId = newGroupId();
@@ -52,7 +52,7 @@ export async function publishToMany(
         // File the editor's copy under its own webhook's server.
         if (getDraft(id)?.serverId !== w.serverId) setDraftServer(id, w.serverId);
       } else {
-        id = createDraft(name, message, w.serverId, { revision: false }).id;
+        id = createDraft(naming.name, message, w.serverId, { revision: false, autoName: naming.autoName }).id;
       }
       markPublished(id, ref, message, w.id);
       setGroup(id, groupId);

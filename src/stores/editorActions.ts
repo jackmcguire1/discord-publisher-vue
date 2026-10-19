@@ -1,6 +1,6 @@
 import { ref } from "vue";
 import { message, currentDraftId, replaceMessage, isDirty, markClean, markUntouched } from "./message";
-import { getDraft, createDraft, updateDraftMessage, statusOf, type Draft } from "./drafts";
+import { getDraft, createDraft, updateDraftMessage, statusOf, nameFromMessage, type Draft } from "./drafts";
 import { selectedWebhookServerId, getWebhook, webhookByDiscordId, selectWebhook } from "./webhooks";
 import { settings } from "./settings";
 import { emptyMessage } from "../discord/schema";
@@ -17,10 +17,11 @@ export function editableDraftId(): string | null {
 
 /** Save the editor into a new draft, asking for a name. Returns false if cancelled. */
 export function saveAsNewDraft(): boolean {
-  const suggested = message.value.embeds[0]?.title || message.value.content.split("\n")[0].slice(0, 60) || "Untitled";
+  const suggested = nameFromMessage(message.value);
   const name = prompt("Draft name", suggested);
   if (name === null) return false;
-  const d = createDraft(name, message.value, selectedWebhookServerId());
+  // Keeping the suggested name means it follows the content; typing one fixes it.
+  const d = createDraft(name, message.value, selectedWebhookServerId(), { autoName: name.trim() === suggested });
   currentDraftId.value = d.id;
   markClean();
   toast("success", "Draft saved", d.name);

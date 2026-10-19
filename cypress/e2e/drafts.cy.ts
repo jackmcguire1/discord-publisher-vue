@@ -108,4 +108,35 @@ describe("drafts", () => {
     cy.toast("Imported 1 draft");
     cy.contains(".draft-name", "payload").should("exist");
   });
+
+  it("a duplicate's name follows its new title, but a chosen name stays", () => {
+    const STARTER = "Stat-Milestones v1.8.2 is live";
+    const title = () => cy.get(".embed-card").first().find("input").first();
+    cy.window().then((w) => {
+      const stub = cy.stub(w, "prompt");
+      stub.onFirstCall().returns(STARTER); // accept the suggested name
+      stub.onSecondCall().returns("My own name"); // type a name
+    });
+
+    // Suggested name, duplicated, then retitled: the copy takes the new title.
+    cy.contains("button", "Save draft").click();
+    cy.openModal("Messages");
+    cy.contains(".draft", STARTER).contains("button", "Duplicate").click();
+    cy.contains(".draft", "(copy)").contains("button", "Load").click();
+    title().clear().type("Brand new title", { delay: 0 });
+    cy.contains("button", "Update draft").click();
+    cy.get(".editing-name").should("contain.text", "Brand new title");
+    cy.openModal("Messages");
+    cy.get(".draft-name").should("contain.text", "Brand new title").and("contain.text", STARTER);
+    cy.get(".draft-name").should("not.contain.text", "(copy)");
+    cy.get("body").type("{esc}");
+
+    // A name someone typed doesn't change with the title.
+    cy.contains("button", "New message").click();
+    cy.get("textarea").first().type("Notes", { delay: 0 });
+    cy.contains("button", "Save draft").click();
+    cy.get("textarea").first().clear().type("Completely different", { delay: 0 });
+    cy.contains("button", "Update draft").click();
+    cy.get(".editing-name").should("contain.text", "My own name");
+  });
 });

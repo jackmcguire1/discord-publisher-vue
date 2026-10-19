@@ -38,6 +38,8 @@ export interface Draft {
   deleted?: PublishInfo & { deletedAt: string; deletedBy?: string };
   /** Number of the latest revision (see revisions.ts); 0 before the first, absent on messages from before versioning. */
   revision?: number;
+  /** The name came from the content (title / first line) and follows it; false once someone names it. */
+  autoName?: boolean;
   /** Shared by the copies of a message published to several webhooks at once (one copy per webhook). */
   groupId?: string;
   /** Id and kind of the latest revision, so "Update draft" can save over it. */
@@ -109,6 +111,27 @@ export function canOverwriteVersion(d: Draft | undefined): boolean {
   return !!d && !!d.revisionId && d.revisionKind === "saved" && (d.revision ?? 0) > 1;
 }
 
+/** The name a message gets from its content: the first embed's title, else the first line of text. */
+export function nameFromMessage(m: Message): string {
+  return (m.embeds?.[0]?.title || m.content?.split("\n")[0] || "").trim().slice(0, 100) || "Untitled";
+}
+
+/**
+ * Whether a message's name follows its content. Older messages have no flag,
+ * so a name that still matches the content (optionally " (copy)") counts.
+ */
+export function followsContent(d: Draft): boolean {
+  if (d.autoName !== undefined) return d.autoName;
+  const derived = nameFromMessage(d.message);
+  return d.name === derived || d.name === `${derived} (copy)`;
+}
+
+/** Name fields to write alongside new content: the new content's name, if the name follows content. */
+function renamedFor(d: Draft | undefined, message: Message): Partial<Draft> {
+  if (!d || !followsContent(d)) return {};
+  return { name: nameFromMessage(message), autoName: true };
+}
+
 /** After a version is deleted from History: if it was the current one, the next save starts a new version. */
 export function forgetRevision(id: string, revisionId: string) {
   if (getDraft(id)?.revisionId === revisionId) store.update(id, { revisionId: undefined, revisionKind: undefined });
@@ -118,8 +141,8 @@ export function createDraft(
   name: string,
   message: Message,
   serverId: string | null = null,
-  /** Record revision 1 (pass false when a publish revision follows immediately). */
-  opts: { revision?: boolean; note?: string } = {}
+  /** Record revision 1 (pass false when a publish revision follows immediately). `autoName`: the name came from the content. */
+  opts: { revision?: boolean; note?: string; autoName?: boolean } = {}
 ): Draft {
   const now = new Date().toISOString();
   const by = myEmail();
@@ -130,6 +153,7 @@ export function createDraft(
     updatedAt: now,
     message: clone(message),
     serverId,
+    autoName: opts.autoName ?? false,
     ...(by && { createdBy: by, updatedBy: by }),
     // 0 = has history, nothing recorded yet (vs. undefined: from before versioning, see ensureBaseline).
     revision: 0,
@@ -174,14 +198,15 @@ export function updateDraftMessage(
     if (!opts.newVersion && canOverwriteVersion(current)) overwriteRevision(id, current!.revisionId!, { message: clone(message), updatedAt: now, updatedBy: by });
     else version = revise(id, "saved", message);
   }
-  store.update(id, { message: clone(message), updatedAt: now, updatedBy: by, ...version });
+  store.update(id, { message: clone(message), updatedAt: now, updatedBy: by, ...version, ...renamedFor(getDraft(id), message) });
   return d;
 }
 
 export function renameDraft(id: string, name: string) {
   const d = getDraft(id);
   if (!d) return;
-  store.update(id, { name: name.trim() || d.name, updatedAt: new Date().toISOString() });
+  // Named by hand: stop following the content.
+  store.update(id, { name: name.trim() || d.name, autoName: false, updatedAt: new Date().toISOString() });
 }
 
 export function setDraftServer(id: string, serverId: string | null) {
@@ -207,6 +232,7 @@ export function markPublished(id: string, ref: PublishedRef, message: Message, s
     updatedAt: now,
     updatedBy: by,
     ...revise(id, "published", message),
+    ...renamedFor(getDraft(id), message),
   });
 }
 
@@ -223,6 +249,7 @@ export function markUpdated(id: string, ref: PublishedRef, message: Message) {
     updatedAt: now,
     updatedBy: by,
     ...revise(id, "updated", message),
+    ...renamedFor(d, message),
   });
 }
 
@@ -243,7 +270,7 @@ export function markDeleted(id: string) {
 export function duplicateDraft(id: string): Draft | undefined {
   const d = getDraft(id);
   if (!d) return;
-  return createDraft(`${d.name} (copy)`, d.message, d.serverId, { note: `Duplicated from "${d.name}"` });
+  return createDraft(`${d.name} (copy)`, d.message, d.serverId, { note: `Duplicated from "${d.name}"`, autoName: followsContent(d) });
 }
 
 /** Link a message into a group of copies. */

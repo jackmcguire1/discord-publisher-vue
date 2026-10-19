@@ -4,7 +4,19 @@ import { settings, webhookInfo } from "../stores/settings";
 import { savedWebhooks, getWebhook, selectWebhook, webhookByDiscordId, selectedWebhookServerId } from "../stores/webhooks";
 import { servers, getServer, guildIdFor } from "../stores/servers";
 import { message, isValid, errors, showErrors, currentDraftId, markClean, replaceMessage } from "../stores/message";
-import { getDraft, createDraft, updateDraftMessage, setDraftServer, markPublished, markUpdated, markDeleted, groupCopies, type Draft } from "../stores/drafts";
+import {
+  getDraft,
+  createDraft,
+  updateDraftMessage,
+  setDraftServer,
+  markPublished,
+  markUpdated,
+  markDeleted,
+  groupCopies,
+  nameFromMessage,
+  followsContent,
+  type Draft,
+} from "../stores/drafts";
 import { publishToMany, updateCopies, deleteCopies, summarize, webhookForCopy, type Outcome } from "../stores/fanout";
 import { selectWebhookFor } from "../stores/editorActions";
 import { sendMessage, editMessage, deleteMessage, messageLink, type DiscordApiError } from "../discord/webhook";
@@ -62,10 +74,6 @@ function describe(e: unknown): string {
   return `${err.message}${err.status ? ` (HTTP ${err.status})` : ""}${detail}`.slice(0, 400);
 }
 
-function defaultName(): string {
-  const first = message.value.embeds[0];
-  return first?.title || message.value.content.split("\n")[0].slice(0, 60) || `Message ${new Date().toLocaleString()}`;
-}
 
 /**
  * Make sure there is a draft to track this publish. A message that has
@@ -81,7 +89,11 @@ function ensureDraft(): string {
     if (!existing.serverId && selectedWebhookServerId()) setDraftServer(currentDraftId.value, selectedWebhookServerId());
     return currentDraftId.value;
   }
-  const d = createDraft(existing?.name ?? defaultName(), message.value, existing?.serverId ?? selectedWebhookServerId(), { revision: false });
+  // A new record for a published/deleted message keeps its name (and whether it follows the content).
+  const d = createDraft(existing?.name ?? nameFromMessage(message.value), message.value, existing?.serverId ?? selectedWebhookServerId(), {
+    revision: false,
+    autoName: existing ? followsContent(existing) : true,
+  });
   currentDraftId.value = d.id;
   if (!existing) toast("info", "Draft saved", `Tracking this message as "${d.name}".`);
   return d.id;
@@ -140,8 +152,10 @@ async function publishMany() {
   if (!destinationWebhooks.value.length || !isValid.value || !canPublish.value) return;
   busy.value = "send";
   try {
-    const name = (draft.value && !draft.value.published && !draft.value.deleted && draft.value.name) || defaultName();
-    const { outcomes, editorDraftId } = await publishToMany(destinationWebhooks.value, message.value, name, ensureDraft);
+    const current = draft.value;
+    const name = current?.name ?? nameFromMessage(message.value);
+    const autoName = current ? followsContent(current) : true;
+    const { outcomes, editorDraftId } = await publishToMany(destinationWebhooks.value, message.value, { name, autoName }, ensureDraft);
     if (editorDraftId) {
       markClean();
       destinations.value = [];
