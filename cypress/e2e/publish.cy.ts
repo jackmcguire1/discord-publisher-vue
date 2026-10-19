@@ -1,4 +1,4 @@
-import { WEBHOOK } from "../support/e2e";
+import { WEBHOOK, WEBHOOK_RE } from "../support/e2e";
 
 describe("publishing", () => {
   beforeEach(() => {
@@ -94,5 +94,25 @@ describe("publishing", () => {
     cy.wait("@fail");
     cy.toast("Publish failed");
     cy.contains(".toast-message", "Invalid Form Body").should("contain.text", "HTTP 400");
+  });
+
+  it("records what was actually sent, even if the editor changes while Discord answers", () => {
+    cy.intercept("POST", WEBHOOK_RE, { statusCode: 200, body: { id: "999000111222333444", channel_id: "555" }, delay: 1500 }).as("slowSend");
+    cy.setWebhook();
+    cy.contains("button", "Publish").click();
+    // Start something else before Discord replies.
+    cy.contains("button", "New message").click();
+    cy.get("textarea").first().type("Something else", { delay: 0 });
+    cy.wait("@slowSend");
+    cy.toast("Published");
+
+    // The editor keeps the new work, unsaved and not attached to the published message.
+    cy.get("textarea").first().should("have.value", "Something else");
+    cy.get(".editing-name").should("have.text", "Not saved yet");
+
+    // The published record is the starter message that was sent.
+    cy.openModal("Messages");
+    cy.get(".draft-item").should("have.length", 1).and("contain.text", "Stat-Milestones v1.8.2 is live").and("contain.text", "published");
+    cy.get(".draft-item").should("not.contain.text", "Something else");
   });
 });

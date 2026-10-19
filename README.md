@@ -69,6 +69,10 @@ Live site: **https://jackmcguire1.github.io/discord-publisher-vue/**
 - **JSON**: view the exact payload that will be sent, copy it, download it, paste a payload from anywhere, or import a file, then apply it back to the editor. Hex colour strings and `null` fields from other tools are handled.
 - **cURL**: a ready-to-run command for sending or editing, copyable or downloadable as a shell script.
 
+### Webhook history
+
+In **Settings → Webhooks and servers** (or the Manage dialog) each webhook shows how many messages went out through it. **History** expands a breakdown: totals (sent, still live, deleted), when it was last used, and every message sent through it, newest first, with who published, updated or deleted it and when, a link to it on Discord, and **Open** to load it into the editor with that webhook selected. Members only see messages they have access to.
+
 ### Publishing to several webhooks
 
 - Switch the Publish panel to **Several webhooks** and tick the webhooks you want (only ones you can access, grouped by server), then **Publish to N webhooks**.

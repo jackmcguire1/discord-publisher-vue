@@ -457,3 +457,6 @@ select.nav-org option { background: var(--bg-1); color: var(--text); }
 }
 .group-children { margin-top: 8px; padding-left: 14px; border-left: 2px solid var(--border); }
 .copy-row .copies-tag { background: rgba(88, 101, 242, .2); color: var(--text-strong); }
+
+.webhook-history { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.webhook-history-summary { gap: 10px; }

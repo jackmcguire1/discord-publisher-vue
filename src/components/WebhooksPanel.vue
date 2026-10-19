@@ -7,8 +7,27 @@ import { settings } from "../stores/settings";
 import { canManage } from "../stores/session";
 import { parseWebhookUrl, maskWebhookUrl } from "../discord/webhook";
 import { toast } from "../stores/toasts";
+import WebhookHistory from "./WebhookHistory.vue";
+import { messagesForWebhook } from "../stores/webhookHistory";
+import { isDirty, replaceMessage, currentDraftId } from "../stores/message";
+import type { Draft } from "../stores/drafts";
 
 const emit = defineEmits<{ used: [] }>();
+
+// --- per-webhook history --------------------------------------------------------
+
+/** The webhook whose history is expanded. */
+const historyOpen = ref<string | null>(null);
+
+/** Load a message from a webhook's history into the editor, with that webhook selected. */
+function openFromHistory(w: SavedWebhook, d: Draft) {
+  if (isDirty.value && currentDraftId.value !== d.id && !confirm("Replace the current editor contents? Unsaved changes will be lost (undo still works).")) return;
+  replaceMessage(JSON.parse(JSON.stringify(d.message)), d.id);
+  selectWebhook(w.id);
+  settings.value.threadId = (d.published ?? d.deleted)?.threadId ?? "";
+  toast("info", "Message opened", d.name);
+  emit("used");
+}
 
 // --- servers -----------------------------------------------------------------
 
@@ -176,11 +195,20 @@ function onServerPick(e: Event) {
                   <div class="row">
                     <span class="draft-name">{{ w.name }}</span>
                     <span v-if="w.id === settings.webhookId" class="tag">selected</span>
+                    <span class="tag webhook-sent-count">{{ messagesForWebhook(w).length }} sent</span>
                   </div>
                   <div v-if="w.description" class="draft-meta">{{ w.description }}</div>
                   <div class="draft-meta mono">{{ maskWebhookUrl(w.url) }}</div>
+                  <WebhookHistory v-if="historyOpen === w.id" :webhook="w" @open="(d) => openFromHistory(w, d)" />
                 </div>
-                <div class="row">
+                <div class="row" style="align-self: flex-start">
+                  <button
+                    class="btn btn-sm btn-ghost webhook-history-toggle"
+                    :aria-expanded="historyOpen === w.id"
+                    @click="historyOpen = historyOpen === w.id ? null : w.id"
+                  >
+                    {{ historyOpen === w.id ? "Hide history" : "History" }}
+                  </button>
                   <button class="btn btn-sm btn-primary" :disabled="w.id === settings.webhookId" @click="use(w)">Use</button>
                   <template v-if="canManage">
                     <button class="btn btn-sm btn-ghost" @click="startEdit(w)">Edit</button>

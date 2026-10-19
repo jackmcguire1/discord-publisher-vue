@@ -4,6 +4,7 @@ import { settings, webhookInfo } from "../stores/settings";
 import { savedWebhooks, getWebhook, selectWebhook, webhookByDiscordId, selectedWebhookServerId } from "../stores/webhooks";
 import { servers, getServer, guildIdFor } from "../stores/servers";
 import { message, isValid, errors, showErrors, currentDraftId, markClean, replaceMessage } from "../stores/message";
+import type { Message } from "../discord/schema";
 import {
   getDraft,
   createDraft,
@@ -80,21 +81,46 @@ function describe(e: unknown): string {
  * already been published (or deleted from Discord) keeps its history, so
  * publishing it again starts a new record.
  */
-function ensureDraft(): string {
-  const existing = getDraft(currentDraftId.value);
-  if (currentDraftId.value && existing && !existing.published && !existing.deleted) {
+/**
+ * What a publish or update works from: the message and draft as they were
+ * when the button was clicked. Discord calls take a moment, and the editor
+ * may change meanwhile (New message, Load…); records must describe what was
+ * actually sent, not whatever the editor holds when Discord answers.
+ */
+interface Start {
+  msg: Message;
+  json: string;
+  draftId: string | null;
+  serverId: string | null;
+}
+
+function capture(): Start {
+  const json = JSON.stringify(message.value);
+  return { msg: JSON.parse(json), json, draftId: currentDraftId.value, serverId: selectedWebhookServerId() };
+}
+
+/** After a Discord call: point the editor at `id` and mark it saved, but only if it still holds what was sent. */
+function settle(start: Start, id: string): boolean {
+  if (currentDraftId.value !== start.draftId || JSON.stringify(message.value) !== start.json) return false;
+  currentDraftId.value = id;
+  markClean();
+  return true;
+}
+
+function ensureDraft(start: Start): string {
+  const existing = getDraft(start.draftId);
+  if (start.draftId && existing && !existing.published && !existing.deleted) {
     // The publish that follows records the revision.
-    updateDraftMessage(currentDraftId.value, message.value, { revision: false });
+    updateDraftMessage(start.draftId, start.msg, { revision: false });
     // File an unassigned draft under the server of the webhook it was published through.
-    if (!existing.serverId && selectedWebhookServerId()) setDraftServer(currentDraftId.value, selectedWebhookServerId());
-    return currentDraftId.value;
+    if (!existing.serverId && start.serverId) setDraftServer(start.draftId, start.serverId);
+    return start.draftId;
   }
   // A new record for a published/deleted message keeps its name (and whether it follows the content).
-  const d = createDraft(existing?.name ?? nameFromMessage(message.value), message.value, existing?.serverId ?? selectedWebhookServerId(), {
+  const d = createDraft(existing?.name ?? nameFromMessage(start.msg), start.msg, existing?.serverId ?? start.serverId, {
     revision: false,
     autoName: existing ? followsContent(existing) : true,
   });
-  currentDraftId.value = d.id;
   if (!existing) toast("info", "Draft saved", `Tracking this message as "${d.name}".`);
   return d.id;
 }
@@ -102,13 +128,15 @@ function ensureDraft(): string {
 async function publish() {
   if (!webhookInfo.value || !isValid.value || !canPublish.value) return;
   busy.value = "send";
+  const start = capture();
+  const webhookId = settings.value.webhookId;
   try {
-    const ref = await sendMessage(settings.value.webhookUrl, message.value, {
+    const ref = await sendMessage(settings.value.webhookUrl, start.msg, {
       threadId: settings.value.threadId.trim() || undefined,
     });
-    const id = ensureDraft();
-    markPublished(id, ref, message.value, settings.value.webhookId);
-    markClean();
+    const id = ensureDraft(start);
+    markPublished(id, ref, start.msg, webhookId);
+    settle(start, id);
     toast("success", "Published", `Message ${ref.messageId} sent to Discord.`);
   } catch (e) {
     toast("error", "Publish failed", describe(e), 10000);
@@ -152,17 +180,17 @@ async function publishMany() {
   if (!destinationWebhooks.value.length || !isValid.value || !canPublish.value) return;
   busy.value = "send";
   try {
+    const start = capture();
     const current = draft.value;
-    const name = current?.name ?? nameFromMessage(message.value);
+    const name = current?.name ?? nameFromMessage(start.msg);
     const autoName = current ? followsContent(current) : true;
-    const { outcomes, editorDraftId } = await publishToMany(destinationWebhooks.value, message.value, { name, autoName }, ensureDraft);
+    const { outcomes, editorDraftId } = await publishToMany(destinationWebhooks.value, start.msg, { name, autoName }, () => ensureDraft(start));
     if (editorDraftId) {
-      markClean();
       destinations.value = [];
       multi.value = false;
       // The editor holds the first copy; select its webhook so single actions match it.
       const d = getDraft(editorDraftId);
-      if (d) selectWebhookFor(d);
+      if (settle(start, editorDraftId) && d) selectWebhookFor(d);
     }
     report("Published to", outcomes);
   } finally {
@@ -174,8 +202,9 @@ async function updateAll() {
   if (!liveCopies.value.length || !isValid.value || !canPublish.value) return;
   busy.value = "edit";
   try {
-    const outcomes = await updateCopies(liveCopies.value, message.value);
-    if (outcomes.some((o) => o.ok)) markClean();
+    const start = capture();
+    const outcomes = await updateCopies(liveCopies.value, start.msg);
+    if (outcomes.some((o) => o.ok) && start.draftId) settle(start, start.draftId);
     report("Updated", outcomes);
   } finally {
     busy.value = "";
@@ -196,7 +225,7 @@ async function deleteAll() {
 async function updateOne(c: Draft) {
   busy.value = "edit";
   try {
-    report("Updated", await updateCopies([c], message.value));
+    report("Updated", await updateCopies([c], capture().msg));
   } finally {
     busy.value = "";
   }
@@ -225,10 +254,12 @@ function copyLink(c: Draft): string {
 async function update() {
   if (!published.value || !canEditPublished.value || !isValid.value || !canPublish.value || !currentDraftId.value) return;
   busy.value = "edit";
+  const start = capture();
+  const id = currentDraftId.value;
   try {
-    const ref = await editMessage(settings.value.webhookUrl, published.value, message.value);
-    markUpdated(currentDraftId.value, ref, message.value);
-    markClean();
+    const ref = await editMessage(settings.value.webhookUrl, published.value, start.msg);
+    markUpdated(id, ref, start.msg);
+    settle(start, id);
     toast("success", "Updated", `Message ${ref.messageId} edited on Discord.`);
   } catch (e) {
     toast("error", "Update failed", describe(e), 10000);
@@ -241,9 +272,10 @@ async function remove() {
   if (!published.value || !canEditPublished.value || !currentDraftId.value || !canDelete.value) return;
   if (!confirm("Delete the published message from Discord? It stays in Messages as deleted, so you can see what it was or publish it again.")) return;
   busy.value = "delete";
+  const id = currentDraftId.value;
   try {
     await deleteMessage(settings.value.webhookUrl, published.value);
-    markDeleted(currentDraftId.value);
+    markDeleted(id);
     toast("success", "Deleted", "The message was removed from Discord.");
   } catch (e) {
     toast("error", "Delete failed", describe(e), 10000);
