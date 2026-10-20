@@ -36,7 +36,7 @@ describe("saved webhooks", () => {
     cy.contains(".field-label", "Webhook URL").should("contain.text", "from saved webhook");
     cy.get('input[placeholder^="https://discord.com/api/webhooks"]').should("have.value", WEBHOOK);
 
-    cy.contains("button", "Publish").click();
+    cy.publish();
     cy.wait("@send").its("request.url").should("include", "123456789012345678/abcDEF_test-token-xyz");
     cy.contains(".banner-success", "via").should("contain.text", "Announcements");
   });

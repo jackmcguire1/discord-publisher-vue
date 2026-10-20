@@ -19,7 +19,7 @@ describe("webhook history", () => {
 
     // First message: published, then updated.
     cy.get("textarea").first().type("First", { delay: 0 });
-    cy.contains("button", "Publish").click();
+    cy.publish();
     cy.wait("@send");
     cy.get("textarea").first().type(" (edited)", { delay: 0 });
     cy.contains("button", "Update published").click();
@@ -28,7 +28,7 @@ describe("webhook history", () => {
     // Second message: published, then deleted.
     cy.contains("button", "New message").click();
     cy.get("textarea").first().type("Second", { delay: 0 });
-    cy.contains("button", "Publish").click();
+    cy.publish();
     cy.wait("@send");
     cy.contains("button", "Delete from Discord").click();
     cy.wait("@delete");

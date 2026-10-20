@@ -52,21 +52,22 @@ describe("drafts", () => {
     cy.contains("button", "Save draft").click();
     cy.openModal("Messages");
 
-    cy.contains(".draft", "Draft A").contains("button", "Rename").click();
+    cy.rowAction("Draft A", "Rename");
     cy.get(".draft-name").should("have.text", "Draft Renamed");
 
-    cy.contains(".draft", "Draft Renamed").contains("button", "Duplicate").click();
+    cy.rowAction("Draft Renamed", "Duplicate");
     cy.get(".draft").should("have.length", 2);
     cy.contains(".draft-name", "Draft Renamed (copy)").should("exist");
 
-    cy.contains(".draft", "(copy)").find(".btn-danger").click();
+    cy.rowAction("(copy)", "Delete draft");
+    cy.get('.choice-button[data-choice="record"]').click();
     cy.get(".draft").should("have.length", 1);
   });
 
   it("marks drafts as published and links to the message", () => {
     cy.stubDiscord();
     cy.setWebhook();
-    cy.contains("button", "Publish").click();
+    cy.publish();
     cy.wait("@send");
     cy.openModal("Messages");
     cy.get(".draft .tag-green").should("have.text", "published");
@@ -123,7 +124,7 @@ describe("drafts", () => {
     // Suggested name, duplicated, then retitled: the copy takes the new title.
     cy.contains("button", "Save draft").click();
     cy.openModal("Messages");
-    cy.contains(".draft", STARTER).contains("button", "Duplicate").click();
+    cy.rowAction(STARTER, "Duplicate");
     cy.contains(".draft", "(copy)").contains("button", "Load").click();
     title().clear().type("Brand new title", { delay: 0 });
     cy.contains("button", "Update draft").click();
@@ -151,10 +152,10 @@ describe("drafts", () => {
     });
     cy.contains("button", "Save draft").click();
     cy.openModal("Messages");
-    cy.contains(".draft", "Weekly").contains("button", "Duplicate").click();
+    cy.rowAction("Weekly", "Duplicate");
     cy.get("@prompt").should("have.been.calledWith", "Name for the copy", "Weekly (copy)");
     cy.get(".draft").should("have.length", 1);
-    cy.contains(".draft", "Weekly").contains("button", "Duplicate").click();
+    cy.rowAction("Weekly", "Duplicate");
     cy.toast("Message duplicated");
     cy.get(".draft-name").should("contain.text", "Next week").and("not.contain.text", "(copy)");
   });

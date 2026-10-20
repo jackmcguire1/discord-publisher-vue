@@ -75,14 +75,19 @@ In **Settings → Webhooks and servers** (or the Manage dialog) each webhook sho
 
 ### Publishing to several webhooks
 
-- Switch the Publish panel to **Several webhooks** and tick the webhooks you want (only ones you can access, grouped by server), then **Publish to N webhooks**.
+- Switch the Publish panel to **Several webhooks** (the choice is remembered) and tick the webhooks you want (only ones you can access, grouped by server), then **Publish to N webhooks**.
 - Each webhook gets its own copy, so server access, permissions and history work per copy; the copies are linked as a group.
 - While editing any copy, **Update all N copies** edits every copy on Discord and **Delete all copies** removes them all. The list under the buttons shows each copy with its own **Open** (switch the editor to it), **Update** and **✕**.
 - In **Messages**, the copies show as one collapsible row ("Published to N webhooks", with how many are live or deleted); expand it to see and act on each copy. A group sits under its server, or under "Several servers" when the copies span more than one.
+- For a message that's already live, webhooks with a copy are ticked and marked published; tick more and **Add to N more webhooks** to send it there too (the new copies join the same group). Send your edits to the existing copies with Update first.
 - A failing webhook doesn't stop the others: you're told which succeeded and which failed (and why). Copies whose webhook you can't access are skipped.
 - Thread IDs aren't used when publishing to several webhooks.
 
 ### Messages: drafts and sent history
+
+- **Publishing works from a saved message.** With unsaved changes (or a message never saved) Publish asks to **Save draft & publish** first, so what goes out is always kept in Messages. Guests get the same, saved in the browser.
+- Each row shows **Load** and **History**; **⋯** holds Rename, Duplicate, Export and Delete.
+- **Deleting a live message** asks whether to **Delete from Discord and remove** it, or **Remove here only** (it then stays on Discord with no way to edit or delete it from the app).
 
 - **Search** finds messages by name, text, embed text, webhook or server; long lists show 50 rows at a time with **Show more** (webhook histories show 20).
 - **Messages** in the navigation bar (or the toolbar, as a quick dialog) lists drafts, published messages and messages deleted from Discord, with filters for each.

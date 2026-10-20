@@ -38,11 +38,15 @@ export async function publishToMany(
   webhooks: SavedWebhook[],
   message: Message,
   naming: { name: string; autoName: boolean },
-  firstDraft: () => string
+  firstDraft: () => string,
+  /** Add copies to this already-published message (and its group) instead of starting a new group. */
+  joining?: Draft
 ): Promise<{ outcomes: Outcome[]; editorDraftId: string | null }> {
-  const groupId = newGroupId();
+  const groupId = joining?.groupId ?? newGroupId();
+  if (joining && !joining.groupId) setGroup(joining.id, groupId);
   const outcomes: Outcome[] = [];
-  let editorDraftId: string | null = null;
+  // When joining, the editor already holds a copy; every destination gets a new one.
+  let editorDraftId: string | null = joining?.id ?? null;
   for (const w of webhooks) {
     try {
       const ref = await sendMessage(w.url, message);

@@ -17,7 +17,7 @@ describe("publishing", () => {
 
   it("publishes with wait=true, records the message and auto-creates a draft", () => {
     cy.setWebhook();
-    cy.contains("button", "Publish").click();
+    cy.publish();
 
     cy.wait("@send").then(({ request }) => {
       expect(request.url).to.include("?wait=true");
@@ -40,13 +40,13 @@ describe("publishing", () => {
   it("includes the thread id when set", () => {
     cy.setWebhook();
     cy.get('input[placeholder="Forum / thread id"]').type("42", { delay: 0 });
-    cy.contains("button", "Publish").click();
+    cy.publish();
     cy.wait("@send").its("request.url").should("include", "thread_id=42");
   });
 
   it("updates a published message with PATCH and no identity fields", () => {
     cy.setWebhook();
-    cy.contains("button", "Publish").click();
+    cy.publish();
     cy.wait("@send");
 
     cy.get(".embed-card").first().find("input").first().clear().type("Edited title", { delay: 0 });
@@ -64,7 +64,7 @@ describe("publishing", () => {
 
   it("deletes a published message and clears the published state", () => {
     cy.setWebhook();
-    cy.contains("button", "Publish").click();
+    cy.publish();
     cy.wait("@send");
 
     cy.contains("button", "Delete from Discord").click();
@@ -76,7 +76,7 @@ describe("publishing", () => {
 
   it("disables editing when a different webhook is configured", () => {
     cy.setWebhook();
-    cy.contains("button", "Publish").click();
+    cy.publish();
     cy.wait("@send");
 
     cy.setWebhook(WEBHOOK.replace("123456789012345678", "000000000000000001"));
@@ -90,7 +90,7 @@ describe("publishing", () => {
       body: { code: 50035, message: "Invalid Form Body", errors: { embeds: {} } },
     }).as("fail");
     cy.setWebhook();
-    cy.contains("button", "Publish").click();
+    cy.publish();
     cy.wait("@fail");
     cy.toast("Publish failed");
     cy.contains(".toast-message", "Invalid Form Body").should("contain.text", "HTTP 400");
@@ -99,7 +99,7 @@ describe("publishing", () => {
   it("records what was actually sent, even if the editor changes while Discord answers", () => {
     cy.intercept("POST", WEBHOOK_RE, { statusCode: 200, body: { id: "999000111222333444", channel_id: "555" }, delay: 1500 }).as("slowSend");
     cy.setWebhook();
-    cy.contains("button", "Publish").click();
+    cy.publish();
     // Start something else before Discord replies.
     cy.contains("button", "New message").click();
     cy.get("textarea").first().type("Something else", { delay: 0 });

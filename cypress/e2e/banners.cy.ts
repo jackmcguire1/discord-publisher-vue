@@ -5,7 +5,7 @@ describe("dismissible banners", () => {
     cy.visitClean();
     cy.stubDiscord();
     cy.setWebhook();
-    cy.contains("button", "Publish").click();
+    cy.publish();
     cy.wait("@send");
     // Re-query rather than chain: the banner re-renders as Firestore confirms the publish.
     cy.get(".banner-success").should("contain.text", "open in Discord");

@@ -49,7 +49,7 @@ describe("publishing to several webhooks", () => {
   it("publishes a copy to each picked webhook and lists them together", () => {
     stubDiscordPerWebhook();
     pick("Hook A", "Hook C");
-    cy.contains("button", "Publish to 2 webhooks").click();
+    cy.publish("Publish to 2 webhooks");
     cy.wait("@send");
     cy.wait("@send");
     cy.toast("Published to 2 webhooks");
@@ -58,6 +58,8 @@ describe("publishing to several webhooks", () => {
     cy.contains("button", "Update all 2 copies").should("exist");
     // The editor keeps the first picked copy, with its webhook selected.
     cy.contains(".copy-item", "Hook A").find(".tag").should("contain.text", "editing");
+    // Several-webhooks mode stays on after publishing; the single dropdown shows the editor's copy.
+    cy.contains(".publish-mode button", "One webhook").click();
     cy.get("select.webhook-select").find("option:selected").should("have.text", "Hook A");
 
     cy.contains(".nav-link", "Messages").click();
@@ -74,7 +76,7 @@ describe("publishing to several webhooks", () => {
   it("updates and deletes every copy, or just one", () => {
     stubDiscordPerWebhook();
     pick("Hook A", "Hook B", "Hook C");
-    cy.contains("button", "Publish to 3 webhooks").click();
+    cy.publish("Publish to 3 webhooks");
     cy.toast("Published to 3 webhooks");
 
     cy.get("textarea").first().type("Edited", { delay: 0 });
@@ -96,7 +98,7 @@ describe("publishing to several webhooks", () => {
   it("reports a failing webhook without stopping the others", () => {
     stubDiscordPerWebhook(["222222222222222222"]);
     pick("Hook A", "Hook B", "Hook C");
-    cy.contains("button", "Publish to 3 webhooks").click();
+    cy.publish("Publish to 3 webhooks");
     cy.contains(".toast-title", "Published to 2 of 3 webhooks").should("be.visible");
     cy.contains(".toast-message", "Hook B: Unknown Webhook (HTTP 404)").should("be.visible");
     cy.get(".copy-item").should("have.length", 2).and("not.contain.text", "Hook B");
@@ -105,10 +107,12 @@ describe("publishing to several webhooks", () => {
   it("opens another copy in the editor with its own webhook selected", () => {
     stubDiscordPerWebhook();
     pick("Hook A", "Hook B");
-    cy.contains("button", "Publish to 2 webhooks").click();
+    cy.publish("Publish to 2 webhooks");
     cy.toast("Published to 2 webhooks");
     cy.contains(".copy-item", "Hook B").find(".copy-open").click();
     cy.contains(".copy-item", "Hook B").find(".tag").should("contain.text", "editing");
+    // Several-webhooks mode stays on after publishing; the single dropdown shows the editor's copy.
+    cy.contains(".publish-mode button", "One webhook").click();
     cy.get("select.webhook-select").find("option:selected").should("have.text", "Hook B");
   });
 });

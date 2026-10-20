@@ -68,20 +68,22 @@ describe("message versions", () => {
     cy.visitClean();
     cy.stubDiscord();
     cy.setWebhook();
-    cy.contains("button", "Publish").click();
+    // Publishing an unsaved message saves it first (v1), then publishes it (v2).
+    cy.publish();
     cy.wait("@send");
-    cy.get(".message-panel .revision-tag").should("have.text", "v1"); // one revision, not a save plus a publish
+    cy.get(".message-panel .revision-tag").should("have.text", "v2");
     content().type("Edited", { delay: 0 });
     cy.contains("button", "Update published").click();
     cy.wait("@edit");
-    cy.get(".message-panel .revision-tag").should("have.text", "v2");
+    cy.get(".message-panel .revision-tag").should("have.text", "v3");
     cy.get(".editor-history").click();
-    cy.get('.revision-item[data-revision="1"]').should("contain.text", "Published to Discord");
-    cy.get('.revision-item[data-revision="2"]').should("contain.text", "Updated on Discord");
-    // What went out to Discord can't be deleted.
+    cy.get('.revision-item[data-revision="1"]').should("contain.text", "Saved");
+    cy.get('.revision-item[data-revision="2"]').should("contain.text", "Published to Discord");
+    cy.get('.revision-item[data-revision="3"]').should("contain.text", "Updated on Discord");
+    // v1 (the starting point) and what went out to Discord can't be deleted.
     cy.get(".revision-delete").should("not.exist");
-    cy.get(".revision-locked").should("have.length", 2);
-    revisionDocs().should("have.length", 2);
+    cy.get(".revision-locked").should("have.length", 3);
+    revisionDocs().should("have.length", 3);
   });
 
   it("opens from the Messages list, and a duplicate starts its own history", () => {
@@ -94,7 +96,7 @@ describe("message versions", () => {
     cy.contains("button", "Save draft").click();
     cy.contains(".nav-link", "Messages").click();
     cy.get(".draft-item .revision-tag").should("have.text", "v1");
-    cy.contains(".draft-item", "Original").contains("button", "Duplicate").click();
+    cy.rowAction("Original", "Duplicate");
     cy.contains(".draft-item", "(copy)").contains("button", "History").click();
     cy.get(".revision-item").should("have.length", 1).and("contain.text", 'Duplicated from "Original"');
   });

@@ -15,10 +15,13 @@ export function editableDraftId(): string | null {
   return d && statusOf(d) === "draft" ? d.id : null;
 }
 
-/** Save the editor into a new draft, asking for a name. Returns false if cancelled. */
-export function saveAsNewDraft(): boolean {
+/**
+ * Save the editor into a new draft, asking for a name (or, with `quiet`, using
+ * the suggested one, which then follows the content). Returns false if cancelled.
+ */
+export function saveAsNewDraft(opts: { quiet?: boolean } = {}): boolean {
   const suggested = nameFromMessage(message.value);
-  const name = prompt("Draft name", suggested);
+  const name = opts.quiet ? suggested : prompt("Draft name", suggested);
   if (name === null) return false;
   // Keeping the suggested name means it follows the content; typing one fixes it.
   const d = createDraft(name, message.value, selectedWebhookServerId(), { autoName: name.trim() === suggested });
@@ -43,9 +46,9 @@ export function saveNewVersion(): boolean {
 }
 
 /** Update the current draft (saving over its current version where allowed), or save a new one. Returns false if cancelled. */
-export function saveDraft(): boolean {
+export function saveDraft(opts: { quiet?: boolean } = {}): boolean {
   const id = editableDraftId();
-  if (!id) return saveAsNewDraft();
+  if (!id) return saveAsNewDraft(opts);
   if (!isDirty.value) {
     toast("info", "No changes to save", getDraft(id)?.name);
     return true;

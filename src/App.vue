@@ -35,6 +35,8 @@ import { hasLegacyData } from "./stores/legacy";
 import "./stores/workspace";
 import { isDismissed, dismiss } from "./stores/dismissed";
 import NewMessageDialog from "./components/NewMessageDialog.vue";
+import ChoiceDialog from "./components/ChoiceDialog.vue";
+import { pendingQuestion } from "./stores/dialog";
 import { newMessageDialog, historyFor } from "./stores/editorActions";
 import HistoryModal from "./components/HistoryModal.vue";
 import { route, href } from "./router";
@@ -45,7 +47,7 @@ const view = ref<View>(null);
 function onKey(e: KeyboardEvent) {
   const target = e.target as HTMLElement | null;
   const typing = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA");
-  if (typing || view.value || authorsDialog.value || newMessageDialog.value || historyFor.value || route.value.page !== "editor") return; // let native undo handle text fields and modals
+  if (typing || view.value || authorsDialog.value || newMessageDialog.value || historyFor.value || pendingQuestion.value || route.value.page !== "editor") return; // let native undo handle text fields and modals
   const mod = e.metaKey || e.ctrlKey;
   if (mod && e.key.toLowerCase() === "z") {
     e.preventDefault();
@@ -118,6 +120,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKey));
     </div>
   </div>
   <NewMessageDialog v-if="newMessageDialog" />
+  <ChoiceDialog />
   <HistoryModal v-if="historyFor" :key="historyFor" />
   <Toasts />
 </template>

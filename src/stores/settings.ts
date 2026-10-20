@@ -7,6 +7,8 @@ interface Settings {
   threadId: string;
   /** Id of the saved webhook the URL came from, or null for a hand-typed URL. */
   webhookId: string | null;
+  /** Publish panel mode, remembered on this device. */
+  publishMode: "one" | "several";
 }
 
 const stored = load<Partial<Settings>>("settings", {});
@@ -14,6 +16,7 @@ const state = ref<Settings>({
   webhookUrl: stored.webhookUrl ?? "",
   threadId: stored.threadId ?? "",
   webhookId: stored.webhookId ?? null,
+  publishMode: stored.publishMode === "several" ? "several" : "one",
 });
 persistRef("settings", state);
 

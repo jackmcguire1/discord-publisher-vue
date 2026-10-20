@@ -52,7 +52,7 @@ describe("JSON and cURL", () => {
   it("offers an edit cURL once a message is published", () => {
     cy.stubDiscord();
     cy.setWebhook();
-    cy.contains("button", "Publish").click();
+    cy.publish();
     cy.wait("@send");
     cy.openModal("cURL");
     cy.contains("label", "Edit published message").click();

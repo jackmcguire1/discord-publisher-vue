@@ -3,7 +3,8 @@ import { ref, computed } from "vue";
 import { settings, webhookInfo } from "../stores/settings";
 import { savedWebhooks, getWebhook, selectWebhook, webhookByDiscordId, selectedWebhookServerId } from "../stores/webhooks";
 import { servers, getServer, guildIdFor } from "../stores/servers";
-import { message, isValid, errors, showErrors, currentDraftId, markClean, replaceMessage } from "../stores/message";
+import { message, isValid, errors, showErrors, currentDraftId, markClean, replaceMessage, isDirty } from "../stores/message";
+import { ask } from "../stores/dialog";
 import type { Message } from "../discord/schema";
 import {
   getDraft,
@@ -19,7 +20,7 @@ import {
   type Draft,
 } from "../stores/drafts";
 import { publishToMany, updateCopies, deleteCopies, summarize, webhookForCopy, type Outcome } from "../stores/fanout";
-import { selectWebhookFor } from "../stores/editorActions";
+import { selectWebhookFor, saveDraft, editableDraftId } from "../stores/editorActions";
 import { sendMessage, editMessage, deleteMessage, messageLink, type DiscordApiError } from "../discord/webhook";
 import { toast } from "../stores/toasts";
 import { canManage, canPublish, canDelete } from "../stores/session";
@@ -125,8 +126,29 @@ function ensureDraft(start: Start): string {
   return d.id;
 }
 
+/**
+ * Publishing works from a saved message, so what goes out is always kept in
+ * Messages. With unsaved changes (or a message never saved), ask to save first.
+ */
+async function ensureSaved(): Promise<boolean> {
+  if (draft.value && !isDirty.value) return true;
+  const updating = !!editableDraftId();
+  const choice = await ask(
+    "Save before publishing",
+    draft.value
+      ? "This message has changes that aren't saved. Save them first, so what you publish is what's kept in Messages."
+      : "This message hasn't been saved yet. Save it as a draft first, so it's kept in Messages (you can rename it later).",
+    [
+      { id: "cancel", label: "Cancel", kind: "ghost" },
+      { id: "save", label: updating ? "Update draft & publish" : "Save draft & publish", kind: "primary" },
+    ]
+  );
+  return choice === "save" && saveDraft({ quiet: true });
+}
+
 async function publish() {
   if (!webhookInfo.value || !isValid.value || !canPublish.value) return;
+  if (!(await ensureSaved())) return;
   busy.value = "send";
   const start = capture();
   const webhookId = settings.value.webhookId;
@@ -147,8 +169,12 @@ async function publish() {
 
 // --- several webhooks at once ------------------------------------------------
 
-/** Publishing to a picked set of saved webhooks instead of the single one above. */
-const multi = ref(false);
+/** Publishing to a picked set of saved webhooks instead of the single one above (remembered per device). */
+const multi = computed({
+  // The mode switch only shows with more than one saved webhook.
+  get: () => settings.value.publishMode === "several" && savedWebhooks.value.length > 1,
+  set: (on: boolean) => (settings.value.publishMode = on ? "several" : "one"),
+});
 const destinations = ref<string[]>([]);
 /** Checklist sections: each accessible server with its webhooks, then unfiled ones. */
 const checklist = computed(() => [
@@ -160,6 +186,9 @@ const destinationWebhooks = computed(() =>
   checklist.value.flatMap((g) => g.webhooks).filter((w) => destinations.value.includes(w.id))
 );
 
+/** Picked webhooks that don't have a copy yet. */
+const newDestinations = computed(() => destinationWebhooks.value.filter((w) => !alreadyPublished.value.has(w.id)).length);
+
 function toggleDestination(id: string, on: boolean) {
   destinations.value = on ? [...new Set([...destinations.value, id])] : destinations.value.filter((x) => x !== id);
 }
@@ -169,6 +198,14 @@ const copies = computed(() => groupCopies(draft.value?.groupId));
 const grouped = computed(() => copies.value.length > 1);
 const liveCopies = computed(() => copies.value.filter((c) => c.published));
 
+/** Adding webhooks to a message that's already live: the new copies join its group. */
+const joining = computed(() => (draft.value?.published ? draft.value : undefined));
+/** Saved webhooks that already have a live copy of this message. */
+const alreadyPublished = computed(() => {
+  const live = grouped.value ? liveCopies.value : joining.value ? [joining.value] : [];
+  return new Set(live.map((c) => webhookForCopy(c)?.id).filter((x): x is string => !!x));
+});
+
 function report(action: string, outcomes: Outcome[]) {
   if (!outcomes.length) return;
   const { ok, total, detail } = summarize(outcomes);
@@ -177,17 +214,28 @@ function report(action: string, outcomes: Outcome[]) {
 }
 
 async function publishMany() {
-  if (!destinationWebhooks.value.length || !isValid.value || !canPublish.value) return;
+  const targets = destinationWebhooks.value.filter((w) => !alreadyPublished.value.has(w.id));
+  if (!targets.length || !isValid.value || !canPublish.value) return;
+  const live = joining.value;
+  if (live && isDirty.value) {
+    // New copies get the published content; edits must reach the existing copies first.
+    await ask(
+      "Update the existing copies first",
+      "New webhooks get the same content as the copies already on Discord. Use Update to send your changes to the existing copies, then add webhooks.",
+      [{ id: "ok", label: "OK", kind: "primary" }]
+    );
+    return;
+  }
+  if (!live && !(await ensureSaved())) return;
   busy.value = "send";
   try {
     const start = capture();
     const current = draft.value;
     const name = current?.name ?? nameFromMessage(start.msg);
     const autoName = current ? followsContent(current) : true;
-    const { outcomes, editorDraftId } = await publishToMany(destinationWebhooks.value, start.msg, { name, autoName }, () => ensureDraft(start));
-    if (editorDraftId) {
-      destinations.value = [];
-      multi.value = false;
+    const { outcomes, editorDraftId } = await publishToMany(targets, start.msg, { name, autoName }, () => ensureDraft(start), live);
+    destinations.value = [];
+    if (editorDraftId && !live) {
       // The editor holds the first copy; select its webhook so single actions match it.
       const d = getDraft(editorDraftId);
       if (settle(start, editorDraftId) && d) selectWebhookFor(d);
@@ -299,18 +347,29 @@ async function remove() {
           <button class="btn btn-sm" :class="multi ? 'btn-ghost' : 'btn-primary'" role="tab" :aria-selected="!multi" @click="multi = false">One webhook</button>
           <button class="btn btn-sm mode-multi" :class="multi ? 'btn-primary' : 'btn-ghost'" role="tab" :aria-selected="multi" @click="multi = true">Several webhooks</button>
         </div>
-        <span v-if="multi" class="muted small">{{ destinations.length }} selected</span>
+        <span v-if="multi" class="muted small">{{ newDestinations }} selected</span>
       </div>
 
       <div v-if="multi" class="destinations">
         <div v-for="g in checklist" :key="g.label" class="destination-group">
           <div class="group-label">{{ g.label }}</div>
-          <label v-for="w in g.webhooks" :key="w.id" class="checkbox destination">
-            <input type="checkbox" :value="w.id" :checked="destinations.includes(w.id)" @change="toggleDestination(w.id, ($event.target as HTMLInputElement).checked)" />
+          <label v-for="w in g.webhooks" :key="w.id" class="checkbox destination" :class="{ muted: alreadyPublished.has(w.id) }">
+            <input
+              type="checkbox"
+              :value="w.id"
+              :checked="alreadyPublished.has(w.id) || destinations.includes(w.id)"
+              :disabled="alreadyPublished.has(w.id)"
+              @change="toggleDestination(w.id, ($event.target as HTMLInputElement).checked)"
+            />
             {{ w.name }}<span v-if="w.description" class="muted small"> · {{ w.description }}</span>
+            <span v-if="alreadyPublished.has(w.id)" class="tag tag-green">published</span>
           </label>
         </div>
-        <p class="muted small" style="margin: 0">Each webhook gets its own copy, linked together so you can update or delete them all later. Thread IDs aren't used here.</p>
+        <p class="muted small" style="margin: 0">
+          <template v-if="joining">This message is live; tick more webhooks to add copies of it.</template>
+          <template v-else>Each webhook gets its own copy, linked together so you can update or delete them all later.</template>
+          Thread IDs aren't used here.
+        </p>
       </div>
 
       <template v-else>
@@ -369,12 +428,26 @@ async function remove() {
         <div v-if="multi" class="row">
           <button
             class="btn btn-success publish-many"
-            :disabled="!destinations.length || !isValid || !!busy || !canPublish"
+            :disabled="!newDestinations || !isValid || !!busy || !canPublish"
             :title="!canPublish ? 'You don\'t have permission to publish in this organization' : ''"
             @click="publishMany"
           >
-            {{ busy === "send" ? "Publishing…" : `Publish to ${destinations.length} webhook${destinations.length === 1 ? "" : "s"}` }}
+            {{
+              busy === "send"
+                ? "Publishing…"
+                : joining
+                  ? `Add to ${newDestinations} more webhook${newDestinations === 1 ? "" : "s"}`
+                  : `Publish to ${newDestinations} webhook${newDestinations === 1 ? "" : "s"}`
+            }}
           </button>
+          <template v-if="joining && liveCopies.length > 1">
+            <button class="btn btn-primary update-all" :disabled="!isValid || !!busy || !canPublish" @click="updateAll">
+              {{ busy === "edit" ? "Updating…" : `Update all ${liveCopies.length} copies` }}
+            </button>
+            <button class="btn btn-danger delete-all" :disabled="!!busy || !canDelete" @click="deleteAll">
+              {{ busy === "delete" ? "Deleting…" : "Delete all copies" }}
+            </button>
+          </template>
         </div>
         <div v-else-if="grouped" class="row">
           <button class="btn btn-success" :disabled="!webhookInfo || !isValid || !!busy || !canPublish" @click="publish">

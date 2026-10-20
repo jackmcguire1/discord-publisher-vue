@@ -15,7 +15,7 @@ describe("messages: published history", () => {
     cy.visitClean();
     cy.stubDiscord();
     addSavedWebhook();
-    cy.contains("button", "Publish").click();
+    cy.publish();
     cy.wait("@send");
   });
 
@@ -60,7 +60,8 @@ describe("messages: published history", () => {
     cy.contains(".nav-link", "Messages").click();
     cy.get('[data-filter="published"]').click();
     cy.window().then((w) => cy.stub(w, "prompt").callsFake((_m: string, suggested: string) => suggested));
-    cy.get(".draft-item").should("have.length", 1).contains("button", "Duplicate").click();
+    cy.get(".draft-item").should("have.length", 1);
+    cy.rowAction("published", "Duplicate");
     cy.toast("Message duplicated");
     cy.get('[data-filter="all"]').should("have.attr", "aria-selected", "true");
     cy.get(".draft-item").should("have.length", 2);
@@ -79,7 +80,7 @@ describe("messages: published history", () => {
     cy.contains("button", "Delete from Discord").click();
     cy.wait("@delete");
     cy.get(".deleted-banner").should("contain.text", "Deleted from Discord").and("contain.text", USER_EMAIL);
-    cy.contains("button", "Publish as new").click();
+    cy.publish("Publish as new");
     cy.wait("@send");
 
     cy.openModal("Messages");
@@ -104,7 +105,7 @@ describe("messages: member permissions", () => {
     cy.visitClean();
     cy.stubDiscord();
     addSavedWebhook();
-    cy.contains("button", "Publish").click();
+    cy.publish();
     cy.wait("@send");
 
     cy.accountMenu("Members");
@@ -120,7 +121,9 @@ describe("messages: member permissions", () => {
     cy.contains("button", /^\s*Publish\s*$/).should("be.disabled");
 
     cy.openModal("Messages");
-    cy.contains(".draft-item", "published").find(".btn-danger").should("be.disabled");
+    cy.contains(".draft-item", "published").find(".row-menu-toggle").click();
+    cy.get(".row-menu .row-delete").should("be.disabled");
+    cy.contains(".draft-item", "published").find(".row-menu-toggle").click();
     cy.contains(".draft-item", "published").contains("button", "Load").click();
     cy.toast("Loaded from Discord");
     cy.contains("button", "Update published").should("be.disabled");

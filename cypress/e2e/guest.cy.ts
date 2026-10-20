@@ -24,7 +24,7 @@ describe("guest mode", () => {
     cy.contains("button", "Save draft").click();
     cy.toast("Draft saved");
 
-    cy.contains("button", "Publish").click();
+    cy.publish();
     cy.wait("@send");
 
     cy.reload();

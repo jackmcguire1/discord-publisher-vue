@@ -81,7 +81,7 @@ describe("servers", () => {
     addWebhook("Announcements", WEBHOOK);
     cy.get("body").type("{esc}");
 
-    cy.contains("button", "Publish").click();
+    cy.publish();
     cy.wait("@send");
     cy.contains("a", "open in Discord")
       .should("have.attr", "href")
@@ -138,7 +138,7 @@ describe("servers", () => {
     addServer("Exported server", GUILD);
     addWebhook("Announcements", WEBHOOK);
     cy.get("body").type("{esc}");
-    cy.contains("button", "Publish").click();
+    cy.publish();
     cy.wait("@send");
 
     // Simulate an import on a browser that has no servers: a drafts file carrying a server entry.

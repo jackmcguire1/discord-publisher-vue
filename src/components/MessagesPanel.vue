@@ -2,7 +2,6 @@
 import { ref, computed, nextTick, watch } from "vue";
 import {
   drafts,
-  deleteDraft,
   duplicateDraft,
   renameDraft,
   setDraftServer,
@@ -21,6 +20,7 @@ import { settings, webhookInfo } from "../stores/settings";
 import { servers, getServer, addServer, findServerByName } from "../stores/servers";
 import { downloadText, readFileAsText, slugify, formatDateTime } from "../util";
 import MessageRow from "./MessageRow.vue";
+import { removeMessage } from "../stores/messageActions";
 import { webhookForCopy } from "../stores/fanout";
 import { toast } from "../stores/toasts";
 
@@ -204,10 +204,7 @@ function rename(d: Draft) {
 }
 
 function remove(d: Draft) {
-  const what = isHistory(d) ? `Remove "${d.name}" and its publish history from this organization?` : `Delete draft "${d.name}"?`;
-  if (!confirm(`${what} This does not touch Discord.`)) return;
-  deleteDraft(d.id);
-  if (currentDraftId.value === d.id) currentDraftId.value = null;
+  removeMessage(d);
 }
 
 const resolveServer = (id: string) => {

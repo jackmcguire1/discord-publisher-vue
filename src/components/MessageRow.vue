@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref, onMounted, onUnmounted } from "vue";
 import { currentDraftId } from "../stores/message";
 import { statusOf, type Draft } from "../stores/drafts";
 import { messageLink } from "../discord/webhook";
@@ -20,6 +21,24 @@ const emit = defineEmits<{
   remove: [d: Draft];
   server: [d: Draft, serverId: string | null];
 }>();
+
+// The ⋯ menu closes on any click outside it, or Escape.
+const menuOpen = ref(false);
+const menuRoot = ref<HTMLElement | null>(null);
+function onDocClick(e: MouseEvent) {
+  if (menuOpen.value && menuRoot.value && !menuRoot.value.contains(e.target as Node)) menuOpen.value = false;
+}
+function onKey(e: KeyboardEvent) {
+  if (e.key === "Escape") menuOpen.value = false;
+}
+onMounted(() => {
+  document.addEventListener("click", onDocClick);
+  document.addEventListener("keydown", onKey);
+});
+onUnmounted(() => {
+  document.removeEventListener("click", onDocClick);
+  document.removeEventListener("keydown", onKey);
+});
 
 function isHistory(d: Draft) {
   return statusOf(d) !== "draft";
@@ -69,15 +88,30 @@ function via(webhookId: string, savedWebhookId?: string | null) {
       </select>
       <button class="btn btn-sm btn-primary" :disabled="loading === d.id" @click="emit('load', d)">{{ loading === d.id ? "Loading…" : "Load" }}</button>
       <button class="btn btn-sm btn-ghost message-history" :disabled="!d.revision" title="Revision history" @click="emit('history', d)">History</button>
-      <button class="btn btn-sm btn-ghost" title="Rename" @click="emit('rename', d)">Rename</button>
-      <button class="btn btn-sm btn-ghost" @click="emit('duplicate', d)">Duplicate</button>
-      <button class="btn btn-sm btn-ghost" @click="emit('export', d)">Export</button>
-      <button
-        class="btn btn-sm btn-danger"
-        :disabled="isHistory(d) && !canDelete"
-        :title="isHistory(d) ? (canDelete ? 'Remove from history' : 'You don\'t have permission to remove published messages') : 'Delete draft'"
-        @click="emit('remove', d)"
-      >✕</button>
+      <div ref="menuRoot" class="row-menu-wrap">
+        <button
+          class="btn btn-sm btn-ghost row-menu-toggle"
+          aria-haspopup="menu"
+          :aria-expanded="menuOpen"
+          title="More actions"
+          @click.stop="menuOpen = !menuOpen"
+        >⋯</button>
+        <div v-if="menuOpen" class="row-menu" role="menu" @click="menuOpen = false">
+          <button class="row-menu-item" role="menuitem" @click="emit('rename', d)">Rename</button>
+          <button class="row-menu-item" role="menuitem" @click="emit('duplicate', d)">Duplicate</button>
+          <button class="row-menu-item" role="menuitem" @click="emit('export', d)">Export</button>
+          <div class="nav-menu-divider" />
+          <button
+            class="row-menu-item row-menu-danger row-delete"
+            role="menuitem"
+            :disabled="isHistory(d) && !canDelete"
+            :title="isHistory(d) && !canDelete ? 'You don\'t have permission to remove published messages' : ''"
+            @click="emit('remove', d)"
+          >
+            {{ d.published ? "Delete…" : isHistory(d) ? "Remove from history" : "Delete draft" }}
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>

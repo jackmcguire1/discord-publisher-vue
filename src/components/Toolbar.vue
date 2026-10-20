@@ -61,7 +61,7 @@ const updateHint = computed(() =>
       Authors <span class="tag">{{ savedAuthors.length }}</span>
     </button>
     <div class="toolbar-spacer" />
-    <button v-if="editableDraft" class="btn btn-ghost btn-sm" title="Save as a separate message" @click="saveAsNew">Save as new</button>
+    <button v-if="editableDraft" class="btn btn-ghost btn-sm" title="Save as a separate message" @click="saveAsNew()">Save as new</button>
     <button
       v-if="editableDraft"
       class="btn btn-ghost btn-sm new-version"
@@ -70,7 +70,7 @@ const updateHint = computed(() =>
     >
       New version
     </button>
-    <button class="btn btn-sm save-draft" :class="{ 'btn-primary': isDirty }" :title="editableDraft ? updateHint : ''" @click="saveDraft">
+    <button class="btn btn-sm save-draft" :class="{ 'btn-primary': isDirty }" :title="editableDraft ? updateHint : ''" @click="saveDraft()">
       {{ editableDraft ? "Update draft" : draft ? "Save as draft" : "Save draft" }}
     </button>
   </div>

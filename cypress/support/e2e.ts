@@ -26,6 +26,13 @@ declare global {
       stubDiscord(): Chainable<void>;
       /** Paste the test webhook URL into the publish panel. */
       setWebhook(url?: string): Chainable<void>;
+      /**
+       * Click a publish button. If the message has unsaved work, the app asks to
+       * save it first; confirm that.
+       */
+      publish(label?: string): Chainable<void>;
+      /** Open a message row's ⋯ menu (the row containing `rowText`) and click an action. */
+      rowAction(rowText: string, action: string): Chainable<void>;
       /** Open the navbar account menu and click an item by label. */
       accountMenu(item: string): Chainable<void>;
       /** Open a toolbar modal by its button label. */
@@ -109,6 +116,21 @@ Cypress.Commands.add("stubDiscord", () => {
 
 Cypress.Commands.add("setWebhook", (url = WEBHOOK) => {
   cy.get('input[placeholder^="https://discord.com/api/webhooks"]').clear().type(url, { delay: 0 });
+});
+
+Cypress.Commands.add("publish", (label = "Publish") => {
+  cy.get(".editing-name")
+    .invoke("text")
+    .then((text) => {
+      const needsSave = text.includes("Not saved yet") || text.includes("unsaved changes");
+      cy.contains("button", label).click();
+      if (needsSave) cy.get('.choice-button[data-choice="save"]').click();
+    });
+});
+
+Cypress.Commands.add("rowAction", (rowText, action) => {
+  cy.contains(".draft-item", rowText).find(".row-menu-toggle").click();
+  cy.contains(".row-menu .row-menu-item", action).click();
 });
 
 Cypress.Commands.add("accountMenu", (item) => {
