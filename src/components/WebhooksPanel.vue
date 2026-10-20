@@ -130,8 +130,10 @@ function remove(w: SavedWebhook) {
   if (editingId.value === w.id) reset();
 }
 function use(w: SavedWebhook) {
-  selectWebhook(w.id);
-  toast("info", "Webhook selected", w.name);
+  if (settings.value.webhookId !== w.id) {
+    selectWebhook(w.id);
+    toast("info", "Webhook selected", w.name);
+  }
   emit("used");
 }
 function onServerPick(e: Event) {
@@ -209,7 +211,13 @@ function onServerPick(e: Event) {
                   >
                     {{ historyOpen === w.id ? "Hide history" : "History" }}
                   </button>
-                  <button class="btn btn-sm btn-primary" :disabled="w.id === settings.webhookId" @click="use(w)">Use</button>
+                  <button
+                    class="btn btn-sm btn-primary webhook-use"
+                    :title="w.id === settings.webhookId ? 'Already selected in the editor' : 'Select it in the editor'"
+                    @click="use(w)"
+                  >
+                    {{ w.id === settings.webhookId ? "In use" : "Use" }}
+                  </button>
                   <template v-if="canManage">
                     <button class="btn btn-sm btn-ghost" @click="startEdit(w)">Edit</button>
                     <button class="btn btn-sm btn-danger" @click="remove(w)">✕</button>

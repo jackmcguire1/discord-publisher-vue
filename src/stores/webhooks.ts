@@ -84,7 +84,13 @@ export function selectedWebhookServerId(): string | null {
 
 export function deleteWebhook(id: string) {
   store.remove(id);
-  if (settings.value.webhookId === id) settings.value.webhookId = null;
+  // Deleting the selected webhook clears the publish fields too, so its URL
+  // (and token) doesn't linger as a hand-typed "Custom URL".
+  if (settings.value.webhookId === id) {
+    settings.value.webhookId = null;
+    settings.value.webhookUrl = "";
+    settings.value.threadId = "";
+  }
 }
 
 /** Point the publish panel at a saved webhook. */

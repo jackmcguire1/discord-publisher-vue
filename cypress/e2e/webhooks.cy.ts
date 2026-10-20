@@ -117,4 +117,22 @@ describe("saved webhooks", () => {
     cy.get("select.webhook-select").find("option:selected").should("have.text", "Announcements");
     cy.get('input[placeholder^="https://discord.com/api/webhooks"]').should("have.value", WEBHOOK);
   });
+
+  it("deleting the selected webhook clears its URL, and adding it back makes it usable again", () => {
+    cy.contains("button", "Manage").click();
+    addWebhook("Private 2", "", WEBHOOK);
+    cy.get(".modal .webhook-item .btn-danger").click();
+    cy.get(".modal .webhook-item").should("not.exist");
+    cy.get("body").type("{esc}");
+    // No stale token left behind in the URL field.
+    cy.get('input[placeholder^="https://discord.com/api/webhooks"]').should("have.value", "");
+
+    cy.accountMenu("Webhooks and servers");
+    cy.get(".settings input[placeholder='e.g. Announcements']").type("Private 2", { delay: 0 });
+    cy.get(".settings input[placeholder^='https://discord.com/api/webhooks']").type(WEBHOOK, { delay: 0 });
+    cy.contains(".settings button", "Add webhook").click();
+    cy.contains(".settings .webhook-item", "Private 2").find(".webhook-use").should("contain.text", "In use").and("not.be.disabled").click();
+    cy.location("hash").should("eq", "");
+    cy.get("select.webhook-select").find("option:selected").should("have.text", "Private 2");
+  });
 });
