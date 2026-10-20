@@ -21,7 +21,7 @@ describe("navigation and settings", () => {
     cy.get(".settings input[placeholder^='https://discord.com/api/webhooks']").type(WEBHOOK, { delay: 0 });
     cy.contains(".settings button", "Add webhook").click();
     cy.toast("Webhook saved");
-    cy.contains(".settings .webhook-item", "From settings").find(".webhook-use").should("contain.text", "In use").and("not.be.disabled");
+    cy.contains(".settings .webhook-item", "From settings").find(".tag").should("contain.text", "selected");
 
     cy.contains(".nav-link", "Editor").click();
     cy.get("select.webhook-select").find("option:selected").should("have.text", "From settings");
