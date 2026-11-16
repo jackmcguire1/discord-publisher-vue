@@ -16,7 +16,7 @@
     "deploy:rules": "firebase deploy --only firestore:rules,firestore:indexes"
   },
   "dependencies": {
-    "firebase": "13.2.0",
+    "firebase": "13.3.0",
     "highlight.js": "11.12.0",
     "simple-markdown": "^0.7.3",
     "vue": "3.5.45",
@@ -25,12 +25,12 @@
   "devDependencies": {
     "@firebase/rules-unit-testing": "^6.0.0",
     "@types/node": "26.6.6",
-    "@vitejs/plugin-vue": "6.0.10",
-    "cypress": "^16.2.1",
-    "firebase-tools": "^15.35.0",
+    "@vitejs/plugin-vue": "6.0.11",
+    "cypress": "^16.3.0",
+    "firebase-tools": "^15.36.0",
     "start-server-and-test": "^3.0.13",
     "typescript": "~6.0.3",
-    "vite": "8.3.6",
+    "vite": "8.3.8",
     "vue-tsc": "3.3.14"
   }
 }
